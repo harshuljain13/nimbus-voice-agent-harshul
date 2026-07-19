@@ -101,9 +101,9 @@ def test_chat_rejects_empty_and_bad_model(fake_openai):
     assert client.post("/chat", json={"message": "hi", "model_key": "nope"}).status_code == 400
 
 
-def test_chat_gemini_stream_and_rag_deferred(fake_openai):
+def test_chat_gemini_and_stream_deferred(fake_openai):
+    # Gemini → Phase 5; streaming → Phase 6. (RAG is live as of Phase 3 — tested in test_phase3.)
     assert client.post("/chat", json={"message": "hi", "model_key": "gemini-flash"}).status_code == 400
-    assert client.post("/chat", json={"message": "hi", "use_rag": True}).status_code == 400
     assert client.post("/chat", json={"message": "hi", "mode": "stream"}).status_code == 400
 
 
@@ -140,5 +140,5 @@ def test_health_reports_corpus_and_stubs_load():
     assert h["corpus"]["doc_count"] >= 31 and h["corpus"]["context_built"] is True
     assert client.get("/tools").json()["tools"] == []          # Phase 7
     assert client.get("/cart").json()["monthly_total"] == 0    # Phase 7
-    assert client.get("/rag/status").json()["built"] is False  # Phase 3-4
+    assert "built" in client.get("/rag/status").json()         # real in Phase 3
     assert client.post("/session/reset", json={"session_id": "x"}).json()["ok"] is True

@@ -127,3 +127,38 @@ Contract converged on the reference (`message`/`model_key`/`use_context`, `{text
 - Single-turn only in Phase 2 (no conversation memory); verbatim-N + summary history is Phase 5.
 - Scraping moved to a CLI step (`make scrape`) to match the reference; the health pill shows corpus status.
 - context.md cached by mtime; rebuilding the corpus auto-invalidates it.
+
+---
+
+## Phase 3 — RAG retrieval ✅
+
+### Automated (`backend/tests/test_phase3.py`) — 5 passing (embeddings + LLM mocked, offline)
+| # | Test | Verifies |
+|---|------|----------|
+| 3.1 | `test_chunking_splits_docs_with_doc_and_heading` | 31 docs → >40 chunks; none empty; all ≤ MAX_CHARS (windowed); embed_text carries doc + heading |
+| 3.2 | `test_index_build_and_exact_retrieval` | `build()` → chunks>40 + dim; index built; a chunk retrieves **itself** first; scores descending; result shape |
+| 3.3 | `test_chat_rag_uses_small_context_and_reports_chunks` | `/chat use_rag` → `knowledge=rag`; `meta.rag.k`/chunks; `context_tokens < 3000` (vs 23.5k RAGless); `rag_ms` present |
+| 3.4 | `test_rag_status_build_and_retrieve_endpoints` | `/rag/status` false→true; `/rag/build` chunks; `/rag/retrieve` returns k results + latency |
+
+### Live evaluation (real OpenAI embeddings, key from `.env`)
+- Index built = **265 chunks**, 1536-d, `text-embedding-3-small`.
+- "What is the refund policy?" (RAG, k=4) → **490 context tokens vs 23,482 RAGless (98% smaller)**;
+  top chunk `refund / Refund Policy` (0.58); correct answer.
+- "How much is Nimbus CRM Professional?" (RAG) → $45/mo ($36 annual); top chunks pricing + CRM.
+- Latency note: `rag_ms` ≈ 300–640 ms (query embed dominates); total ≈ RAGless — RAG's win is token cost/scale.
+
+### Manual (playground) — checklist
+- [ ] **Knowledge source → RAG** → a **top-k slider** + `index: 265 chunks · text-embedding-3-small` appear.
+- [ ] Ask "What's the refund policy?" → grounded answer; "This turn" shows **rag_ms** + **~500 context tokens** + **retrieved chunks with scores**.
+- [ ] Move **Top-k** 1↔8 → more/fewer chunks retrieved.
+- [ ] Flip **RAGless ↔ RAG** on the same question → context tokens 23.5k vs ~500.
+- [ ] **Inspect context** in RAG mode → prompt contains only the retrieved chunks.
+
+### Edge cases covered
+- Index not built → auto-builds on first RAG query (also `POST /rag/build`).
+- No docs → build raises a clear error ("run make scrape first").
+- RAG artifacts (`data/rag/`) are git-ignored and regenerable.
+
+### Notes
+- Rerank + the 2D vector visualization are Phase 4 (this phase is retrieval + chat integration).
+- `light` profile (OpenAI embeddings) is default; `rich` (local MiniLM) is opt-in for Phase 4 viz.

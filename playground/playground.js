@@ -43,7 +43,8 @@ function payload(message) {
   return {
     session_id: state.session, message, mode: "batch",
     model_key: $("model").value, response_length: state.length,
-    use_context: state.knowledge === "ragless", use_rag: false,
+    use_context: state.knowledge === "ragless", use_rag: state.knowledge === "rag",
+    top_k: Number($("topk").value),
     temperature: Number($("temp").value) / 10,
     system_prompt: $("sysPrompt").value.trim() || null,
   };
@@ -77,15 +78,22 @@ function renderTurn(data) {
     `<div class="stage"><span class="lbl">${label}</span><div class="bar"><i style="width:${(lat[k] / max) * 100}%"></i></div><span class="v">${Math.round(lat[k])}ms</span></div>`).join("");
   const kv = (k, v) => v == null ? "" : `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;
   const n = (x) => x == null ? null : x.toLocaleString();
+  let chunks = "";
+  if (meta.rag && meta.rag.chunks) {
+    const rows = meta.rag.chunks.map((c) =>
+      `<div class="chunk"><span class="chunk-doc">${c.doc}</span><span class="chunk-score">${c.score.toFixed(3)}</span><div class="chunk-head">${c.heading}</div></div>`).join("");
+    chunks = `<div class="chunks-head">Retrieved ${meta.rag.chunks.length} chunks (top-${meta.rag.k})</div>${rows}`;
+  }
   $("turn").innerHTML =
     `<div class="total"><span class="n grad">${Math.round(lat.total_ms)}</span><small>ms total</small></div>` +
     stages +
     `<div style="margin-top:14px"></div>` +
     kv("Knowledge", meta.knowledge) +
-    kv("Context tokens", meta.knowledge === "ragless" ? n(meta.context_tokens) : "0") +
+    kv("Context tokens", meta.knowledge === "none" ? "0" : n(meta.context_tokens)) +
     kv("Prompt tokens", n(meta.prompt_tokens)) +
     kv("Output tokens", n(meta.completion_tokens)) +
-    kv("Model", meta.model);
+    kv("Model", meta.model) +
+    chunks;
 }
 
 // ---- backend status ----
@@ -115,6 +123,15 @@ async function loadModels() {
     const first = d.models.find((m) => m.available);
     if (first) $("model").value = first.key;
   } catch { /* health already shows the problem */ }
+}
+async function refreshRagStatus() {
+  const el = $("ragStatus");
+  try {
+    const d = await (await fetch(state.base + "/rag/status")).json();
+    el.textContent = d.built
+      ? `index: ${d.chunks} chunks · ${d.model}`
+      : "index not built — builds automatically on first RAG query";
+  } catch { el.textContent = "index status unavailable"; }
 }
 
 // ---- context inspector ----
@@ -173,10 +190,15 @@ function init() {
   seg("length", (v) => { state.length = v; });
   seg("knowledge", (v) => {
     state.knowledge = v;
-    $("ctxHint").textContent = v === "ragless"
-      ? "RAGless injects the full context.md into the prompt (no retrieval yet)."
-      : "None: no Nimbus facts injected — the model answers from general knowledge only.";
+    $("ragOpts").hidden = v !== "rag";
+    $("ctxHint").textContent = {
+      ragless: "RAGless injects the full context.md into the prompt (no retrieval).",
+      rag: "RAG retrieves only the top-k relevant chunks — smaller prompt + retrieval latency.",
+      none: "None: no Nimbus facts injected — the model answers from general knowledge only.",
+    }[v];
+    if (v === "rag") refreshRagStatus();
   });
+  $("topk").addEventListener("input", (e) => { $("topkVal").textContent = e.target.value; persist(); });
   $("temp").addEventListener("input", (e) => { $("tempVal").textContent = (e.target.value / 10).toFixed(1); persist(); });
   $("sysPrompt").addEventListener("input", persist);
   $("model").addEventListener("change", persist);

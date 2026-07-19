@@ -10,9 +10,8 @@ backend/.venv/
 .venv/
 .pytest_cache/
 
-# --- RAG artifacts (regenerable via `make scrape` / rag build) ---
-backend/data/faiss.index
-backend/data/chunks.json
+# --- RAG artifacts (regenerable via POST /rag/build) ---
+backend/data/rag/
 
 # --- Node / deploy ---
 node_modules/

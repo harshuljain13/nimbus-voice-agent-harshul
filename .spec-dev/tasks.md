@@ -41,13 +41,14 @@ First real answer. Minimal LLM adapter (OpenAI) + inject `context.md`; a text ch
       `/inspect` (context inspector), `/models`, `/health` corpus; Phase 7/5/3-4 stubs.
 🧪 You test: reference-style playground — ask "What's the refund policy?" / "How much is Nimbus CRM Professional?" → grounded answer + latency + inspector. (13 tests; live-verified)
 
-## Phase 3 — RAG retrieval  (R5 part 1)  ← NEXT
-Chunk + embed the docs into FAISS; retrieve top-k for a query.
-- [ ] `rag/chunk.py` + `rag/embed.py` (profile `light`) + `rag/index.py` (FAISS) + `retrieve(query,k)`.
-- [ ] `POST /rag/retrieve {query,k}` → chunks + scores + `rag_ms`; playground panel with a top-k slider.
-🧪 You test: enter a query, move the top-k slider → see which chunks come back, with scores + retrieval ms.
+## Phase 3 — RAG retrieval  (R5 part 1)  ✅ DONE
+Chunk + embed the docs into FAISS; retrieve top-k and ground the answer on it.
+- [x] `rag/chunk.py` (heading split + window) + `rag/embed.py` (profile `light`, OpenAI 1536-d) + `rag/index.py` (FAISS IndexFlatIP) + `service.query(text,k)`.
+- [x] `POST /rag/retrieve {query,k}` + `/rag/build` + `/rag/status`; `/chat` honors `use_rag`+`top_k` and returns `meta.rag.chunks` + `rag_ms`.
+- [x] Playground: RAG un-locked in Knowledge source + top-k slider + index status; "This turn" shows rag_ms + retrieved chunks with scores.
+🧪 You test: Knowledge source → RAG, ask "What's the refund policy?" → tiny context (~500 tok vs 23.5k), retrieved chunks + rag_ms; move top-k. (5 tests; live: 265 chunks, 98% smaller prompt)
 
-## Phase 4 — RAG vs RAGless toggle + rerank + viz  (R3 + R5 part 2)
+## Phase 4 — RAG vs RAGless toggle + rerank + viz  (R3 + R5 part 2)  ← NEXT
 Make retrieval drive the answer, compare against RAGless, add rerank + the vector picture.
 - [ ] Wire RAG into `/chat` (RAG-grounded answers); `retrieval_mode` toggle (rag | ragless) with latency compare.
 - [ ] `rag/rerank.py` (LLM rerank) + toggle; `rag/viz_math.py` (PCA + KMeans) → `/rag/viz` + query overlay.

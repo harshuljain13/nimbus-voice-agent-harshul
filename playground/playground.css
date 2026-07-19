@@ -149,3 +149,10 @@ dialog::backdrop { background: rgba(4,6,10,.66); backdrop-filter: blur(2px); }
 .ctx-msg .h { display: flex; justify-content: space-between; padding: 8px 12px; background: var(--surface-2); font-size: 11.5px; }
 .ctx-msg .h .role { color: var(--brand); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
 .ctx-msg pre { margin: 0; padding: 12px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; color: var(--muted); }
+
+/* retrieved chunks (RAG) */
+.chunks-head { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); margin: 16px 0 6px; }
+.chunk { padding: 7px 0; border-top: 1px solid var(--line); font-size: 12px; }
+.chunk-doc { color: var(--brand-2); font-weight: 600; }
+.chunk-score { float: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chunk-head { color: var(--muted); margin-top: 2px; }

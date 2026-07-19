@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 from . import __version__, config
 from .latency import Timer, empty_trace
 from .llm import orchestrator as chat_orch
+from .rag import index as rag_index
+from .rag import service as rag_service
 from .scraping import build_context as bc_mod
 from .scraping import paths as corpus_paths
 from .scraping import scrape as scrape_mod
@@ -173,20 +175,23 @@ async def chat(req: ChatRequest, request: Request) -> dict:
     try:
         return await chat_orch.chat(
             message=req.message, model_key=req.model_key, response_length=req.response_length,
-            use_context=req.use_context, use_rag=req.use_rag, system_prompt=req.system_prompt,
-            temperature=req.temperature, mode=req.mode, session_id=req.session_id, headers=headers,
+            use_context=req.use_context, use_rag=req.use_rag, top_k=req.top_k,
+            system_prompt=req.system_prompt, temperature=req.temperature, mode=req.mode,
+            session_id=req.session_id, headers=headers,
         )
     except chat_orch.ChatError as e:
         raise HTTPException(status_code=e.status, detail=e.message)
 
 
 @app.post("/inspect")
-def inspect(req: ChatRequest) -> dict:
+def inspect(req: ChatRequest, request: Request) -> dict:
     """Context inspector: the exact messages that would be sent + per-message token counts."""
+    api_key = config.resolve_key("openai", _headers_lower(request))
     try:
         return chat_orch.inspect(
             message=req.message, response_length=req.response_length, use_context=req.use_context,
-            use_rag=req.use_rag, system_prompt=req.system_prompt, model_key=req.model_key,
+            use_rag=req.use_rag, top_k=req.top_k, system_prompt=req.system_prompt,
+            model_key=req.model_key, api_key=api_key,
         )
     except chat_orch.ChatError as e:
         raise HTTPException(status_code=e.status, detail=e.message)
@@ -223,6 +228,38 @@ def session_reset(req: SessionRef) -> dict:
     return {"ok": True}                                 # server session/history → Phase 5
 
 
+# --------------------------------------------------------------------------- #
+# Phase 3 — RAG retrieval (R5): chunk · embed · FAISS · top-k                  #
+# --------------------------------------------------------------------------- #
+
+class RetrieveRequest(BaseModel):
+    query: str
+    k: int = 4
+
+
 @app.get("/rag/status")
 def rag_status() -> dict:
-    return {"built": False}                             # RAG index → Phase 3-4
+    """Whether the FAISS index is built + its chunk count / embedding model."""
+    return rag_index.status()
+
+
+@app.post("/rag/build")
+def rag_build(request: Request) -> dict:
+    """(Re)build the FAISS index from the scraped docs. Uses the OpenAI key for embeddings."""
+    api_key = config.resolve_key("openai", _headers_lower(request))
+    try:
+        return rag_index.build(api_key)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/rag/retrieve")
+def rag_retrieve(req: RetrieveRequest, request: Request) -> dict:
+    """Top-k chunks for a query (for testing + the Phase 4 visualization)."""
+    api_key = config.resolve_key("openai", _headers_lower(request))
+    try:
+        rag_service.ensure_built(api_key)
+        res = rag_service.query(req.query, k=req.k, api_key=api_key)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"results": res["results"], "latency": res["latency"], "k": res["k"]}

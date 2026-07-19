@@ -12,7 +12,7 @@
   <header class="top">
     <div class="brand">
       <b>Nimbus <span class="grad">Playground</span></b>
-      <span class="phase-chip" id="phaseChip">Phase 2 · RAGless chat</span>
+      <span class="phase-chip" id="phaseChip">Phase 3 · RAG</span>
     </div>
     <div class="top-right">
       <span class="health" id="health"><span class="dot"></span><span id="healthText">connecting…</span></span>
@@ -51,9 +51,15 @@
         <label>Knowledge source</label>
         <div class="seg" id="knowledge">
           <button data-v="ragless" class="active">RAGless</button>
+          <button data-v="rag">RAG</button>
           <button data-v="none">None</button>
         </div>
-        <p class="hint" id="ctxHint">RAGless injects the full context.md into the prompt (no retrieval yet).</p>
+        <p class="hint" id="ctxHint">RAGless injects the full context.md into the prompt (no retrieval).</p>
+        <div id="ragOpts" hidden style="margin-top:11px;">
+          <label>Top-k chunks <span class="val" id="topkVal">4</span></label>
+          <input type="range" id="topk" min="1" max="12" value="4" />
+          <p class="hint" id="ragStatus">index: checking…</p>
+        </div>
       </div>
 
       <div class="field">

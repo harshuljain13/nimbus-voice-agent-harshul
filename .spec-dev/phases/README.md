@@ -8,8 +8,8 @@ Detailed design doc (report) for every phase. Each follows the same structure:
 | 0 | [phase-00-foundation.md](phase-00-foundation.md) | scaffold | ✅ Done |
 | 1 | [phase-01-web-scraping.md](phase-01-web-scraping.md) | R1 | ✅ Done |
 | 2 | [phase-02-ragless-chat.md](phase-02-ragless-chat.md) | R6 + R8 core | ✅ Done |
-| 3 | phase-03-rag-retrieval.md | R5 (retrieval) | ▶ Next |
-| 4 | phase-04-rag-vs-ragless.md | R3 + R5 (rerank/viz) | ◻ Planned |
+| 3 | [phase-03-rag-retrieval.md](phase-03-rag-retrieval.md) | R5 (retrieval) | ✅ Done |
+| 4 | phase-04-rag-vs-ragless.md | R3 + R5 (rerank/viz) | ▶ Next |
 | 5 | phase-05-llm-controls.md | R8 | ◻ Planned |
 | 6 | phase-06-streaming-vs-batch.md | R4 | ◻ Planned |
 | 7 | phase-07-tools.md | R2 + R9 | ◻ Planned |
