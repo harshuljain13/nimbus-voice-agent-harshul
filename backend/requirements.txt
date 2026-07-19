@@ -1,0 +1,15 @@
+# Nimbus Voice Agent backend — Phase 0-3 (scaffold, scraping, LLM core, RAG).
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-dotenv==1.0.1
+httpx==0.28.1
+numpy==2.2.1
+faiss-cpu==1.9.0.post1  # .post1 = same FAISS 1.9.0, adds the cp313 wheel (plain 1.9.0 has no py3.13 build)
+tiktoken==0.8.0
+python-multipart==0.0.20
+imageio-ffmpeg==0.6.0
+# Test runner (used by `make test`; every phase ships pytest tests).
+pytest==8.3.4
+
+# Optional, only for EMBEDDING_PROFILE=rich (local embeddings + cross-encoder rerank):
+# sentence-transformers

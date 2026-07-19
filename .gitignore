@@ -1,0 +1,24 @@
+# --- Secrets ---
+.env
+*.env
+!*.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+backend/.venv/
+.venv/
+.pytest_cache/
+
+# --- RAG artifacts (regenerable via `make scrape` / rag build) ---
+backend/data/faiss.index
+backend/data/chunks.json
+
+# --- Node / deploy ---
+node_modules/
+.vercel/
+
+# --- OS / editor / agent ---
+.DS_Store
+.serena/
+*.log

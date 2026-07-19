@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nimbus Voice Agent · Playground</title>
+  <link rel="icon" href="../nimbus-voice-agent-starter/assets/favicon.svg" />
+  <link rel="stylesheet" href="playground.css" />
+  <script src="runtime-config.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <b>Nimbus <span class="grad">Playground</span></b>
+      <span class="phase-chip" id="phaseChip">Phase 2 · RAGless chat</span>
+    </div>
+    <div class="top-right">
+      <span class="health" id="health"><span class="dot"></span><span id="healthText">connecting…</span></span>
+      <button class="btn small ghost" id="keysBtn">API keys</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- Config -->
+    <aside class="card">
+      <p class="eyebrow">Configuration</p>
+
+      <div class="kb">
+        <div class="ic">📚</div>
+        <div>
+          <div class="kb-main" id="kbMain">Knowledge base</div>
+          <div class="kb-sub" id="kbSub">checking…</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="model">Model</label>
+        <select id="model"></select>
+      </div>
+
+      <div class="field">
+        <label>Response length</label>
+        <div class="seg" id="length">
+          <button data-v="low">Low</button>
+          <button data-v="medium" class="active">Medium</button>
+          <button data-v="high">High</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Knowledge source</label>
+        <div class="seg" id="knowledge">
+          <button data-v="ragless" class="active">RAGless</button>
+          <button data-v="none">None</button>
+        </div>
+        <p class="hint" id="ctxHint">RAGless injects the full context.md into the prompt (no retrieval yet).</p>
+      </div>
+
+      <div class="field">
+        <label>Temperature <span class="val" id="tempVal">0.3</span></label>
+        <input type="range" id="temp" min="0" max="20" value="3" />
+      </div>
+
+      <div class="field">
+        <label for="sysPrompt">System prompt <span class="val" style="font-weight:400;color:var(--faint)">optional</span></label>
+        <textarea id="sysPrompt" placeholder="Leave blank for the default Nimbus agent prompt."></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="inspectBtn">Inspect context</button>
+        <button class="btn ghost" id="resetBtn">Reset</button>
+      </div>
+    </aside>
+
+    <!-- Chat -->
+    <section class="card chat">
+      <div class="messages" id="messages">
+        <div class="empty" id="empty">
+          <h3>Ask Nimbus anything</h3>
+          <p>Grounded in the scraped catalog. Try one of these:</p>
+          <div class="chips">
+            <button class="chip">What's the refund policy?</button>
+            <button class="chip">How much is Nimbus CRM Professional?</button>
+            <button class="chip">What product families do you offer?</button>
+            <button class="chip">Is annual billing cheaper?</button>
+          </div>
+        </div>
+      </div>
+      <form class="composer" id="composer">
+        <input class="text-in" id="input" type="text" autocomplete="off" placeholder="Ask about products, pricing, or policies…" />
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+    </section>
+
+    <!-- This turn -->
+    <aside class="card">
+      <p class="eyebrow">This turn</p>
+      <div id="turn"><p class="stat-empty">Send a message to see latency &amp; tokens.</p></div>
+    </aside>
+  </main>
+
+  <!-- API keys -->
+  <dialog id="keysDlg">
+    <form method="dialog" class="dlg">
+      <h2>API keys</h2>
+      <p class="hint">Stored only in this browser (localStorage), sent per request. Never committed.</p>
+      <div class="field"><label for="k_openai">OpenAI key</label><input class="text-in" id="k_openai" type="password" placeholder="sk-…" /></div>
+      <div class="field"><label for="apiBase">Backend URL</label><input class="text-in" id="apiBase" type="text" placeholder="http://localhost:8100" /></div>
+      <div class="dlg-actions">
+        <button value="cancel" class="btn ghost">Cancel</button>
+        <button value="save" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Context inspector -->
+  <dialog id="ctxDlg">
+    <div class="ctx-dlg">
+      <div class="ctx-head">
+        <h2>Context sent to the LLM</h2>
+        <div class="ctx-tot" id="ctxTot"></div>
+        <button class="btn small ghost" id="ctxClose">Close</button>
+      </div>
+      <div class="ctx-body" id="ctxBody"></div>
+    </div>
+  </dialog>
+
+  <script type="module" src="playground.js"></script>
+</body>
+</html>
