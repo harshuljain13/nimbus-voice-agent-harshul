@@ -7,10 +7,10 @@ import os
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REPO_ROOT = os.path.dirname(_BACKEND_DIR)  # voice-agents/
 
-# Source of truth: the starter site's catalog (override with NIMBUS_CATALOG).
+# Source of truth: the frontend site's catalog (override with NIMBUS_CATALOG).
 CATALOG_PATH = os.getenv(
     "NIMBUS_CATALOG",
-    os.path.join(REPO_ROOT, "nimbus-voice-agent-starter", "data", "catalog.json"),
+    os.path.join(REPO_ROOT, "frontend", "data", "catalog.json"),
 )
 
 DATA_DIR = os.path.join(_BACKEND_DIR, "data")

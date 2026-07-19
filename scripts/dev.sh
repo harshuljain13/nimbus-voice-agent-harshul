@@ -19,7 +19,7 @@ WEB=$!
 echo ""
 echo "  Backend    : http://localhost:8100/health"
 echo "  Playground : http://localhost:8092/playground/playground.html"
-echo "  Nimbus site: http://localhost:8092/nimbus-voice-agent-starter/index.html"
+echo "  Nimbus site: http://localhost:8092/frontend/index.html"
 echo "  Ctrl-C to stop both."
 echo ""
 

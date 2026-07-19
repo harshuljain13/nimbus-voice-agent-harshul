@@ -41,7 +41,7 @@ backend/                 FastAPI — REST, per-stage latency. One process.
     latency.py config.py main.py
   data/                  generated docs + context.md
 playground/              the control panel (config · chat · latency)
-nimbus-voice-agent-starter/   the Nimbus catalog site (the frontend)
+frontend/                the Nimbus catalog site
 .spec-dev/               the living plan (requirements, spec, tasks, phases, reference)
 ```
 
@@ -55,7 +55,7 @@ make dev         # backend :8100 + no-cache static server :8092
 ```
 
 - Playground: http://localhost:8092/playground/playground.html
-- Nimbus site: http://localhost:8092/nimbus-voice-agent-starter/index.html
+- Nimbus site: http://localhost:8092/frontend/index.html
 
 Keys are read from `.env`, or entered in the playground's **API keys** dialog and sent
 per-request as `X-OpenAI-Key` headers. Nothing is ever committed (`.env` is git-ignored).
