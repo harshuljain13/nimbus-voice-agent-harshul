@@ -62,16 +62,17 @@ def assemble(
     use_rag: bool,
     system_prompt: str | None,
     top_k: int = 4,
+    rerank: bool = False,
     api_key: str | None = None,
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
-    """Build the message list + grounding metadata. RAG retrieves top-k chunks; RAGless uses
-    the whole context.md; None injects nothing. Shared by chat() and the inspector."""
+    """Build the message list + grounding metadata. RAG retrieves top-k chunks (optionally
+    reranked); RAGless uses the whole context.md; None injects nothing. Shared by chat()/inspect()."""
     rag_info: dict[str, Any] | None = None
     if use_rag:
         knowledge = "rag"
         try:
             rag_service.ensure_built(api_key)
-            res = rag_service.query(message, k=top_k, api_key=api_key)
+            res = rag_service.query(message, k=top_k, do_rerank=rerank, api_key=api_key)
         except RuntimeError as e:
             raise ChatError(400, f"RAG error: {e}") from e
         context = res["context"]
@@ -108,6 +109,7 @@ async def chat(
     use_context: bool = True,
     use_rag: bool = False,
     top_k: int = 4,
+    rerank: bool = False,
     system_prompt: str | None = None,
     temperature: float = 0.3,
     mode: str = "batch",
@@ -127,7 +129,7 @@ async def chat(
     total = Timer()
     messages, info = assemble(
         message, response_length=response_length, use_context=use_context, use_rag=use_rag,
-        system_prompt=system_prompt, top_k=top_k, api_key=api_key,
+        system_prompt=system_prompt, top_k=top_k, rerank=rerank, api_key=api_key,
     )
     if info["rag"]:
         trace["rag_ms"] = info["rag"]["rag_ms"]
@@ -175,6 +177,7 @@ def inspect(
     use_context: bool = True,
     use_rag: bool = False,
     top_k: int = 4,
+    rerank: bool = False,
     system_prompt: str | None = None,
     model_key: str = "openai-lite",
     api_key: str | None = None,
@@ -184,7 +187,7 @@ def inspect(
     spec = _resolve_model(model_key)
     messages, info = assemble(
         message or "(preview)", response_length=response_length, use_context=use_context,
-        use_rag=use_rag, system_prompt=system_prompt, top_k=top_k, api_key=api_key,
+        use_rag=use_rag, system_prompt=system_prompt, top_k=top_k, rerank=rerank, api_key=api_key,
     )
     rows = []
     total_tokens = total_chars = 0

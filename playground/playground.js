@@ -44,10 +44,42 @@ function payload(message) {
     session_id: state.session, message, mode: "batch",
     model_key: $("model").value, response_length: state.length,
     use_context: state.knowledge === "ragless", use_rag: state.knowledge === "rag",
-    top_k: Number($("topk").value),
+    top_k: Number($("topk").value), rerank: $("rerank").checked,
     temperature: Number($("temp").value) / 10,
     system_prompt: $("sysPrompt").value.trim() || null,
   };
+}
+
+async function compare() {
+  const q = $("input").value.trim() || "What is the refund policy?";
+  $("cmpQ").textContent = `“${q}”`;
+  $("cmpBody").innerHTML = "<p class='stat-empty'>running both…</p>";
+  $("cmpDlg").showModal();
+  const base = { session_id: state.session, message: q, mode: "batch", model_key: $("model").value,
+    response_length: state.length, temperature: Number($("temp").value) / 10, system_prompt: null,
+    top_k: Number($("topk").value) };
+  const run = async (cfg) => {
+    const r = await fetch(state.base + "/chat", { method: "POST", headers: authHeaders(), body: JSON.stringify({ ...base, ...cfg }) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.detail || "failed"); return d;
+  };
+  try {
+    const [rag, rl] = await Promise.all([
+      run({ use_rag: true, use_context: false, rerank: $("rerank").checked }),
+      run({ use_rag: false, use_context: true }),
+    ]);
+    const m = (d, k) => d.meta[k] != null ? d.meta[k].toLocaleString() : "—";
+    const L = (d, k) => Math.round(d.latency[k] || 0);
+    const row = (label, a, b) => `<tr><td>${label}</td><td>${a}</td><td>${b}</td></tr>`;
+    $("cmpBody").innerHTML =
+      `<table class="cmp"><thead><tr><th></th><th>RAG</th><th>RAGless</th></tr></thead><tbody>` +
+      row("Context tokens", m(rag, "context_tokens"), m(rl, "context_tokens")) +
+      row("Prompt tokens", m(rag, "prompt_tokens"), m(rl, "prompt_tokens")) +
+      row("RAG ms", L(rag, "rag_ms"), "—") +
+      row("LLM ms", L(rag, "llm_total_ms"), L(rl, "llm_total_ms")) +
+      row("Total ms", L(rag, "total_ms"), L(rl, "total_ms")) +
+      `</tbody></table>` +
+      `<p class="hint" style="margin-top:12px">RAG sends a fraction of the tokens (cheaper, scales past the context window). Total latency is similar here because RAG's query-embed offsets the smaller-prompt LLM win — and OpenAI caches the big RAGless prompt.</p>`;
+  } catch (e) { $("cmpBody").innerHTML = `<p style="color:var(--bad)">${e.message}</p>`; }
 }
 async function send(message) {
   addMsg("user", message);
@@ -59,6 +91,13 @@ async function send(message) {
     if (!r.ok) { pending.className = "msg err"; pending.textContent = data.detail || `Request failed (${r.status})`; return; }
     pending.className = "msg bot";
     pending.textContent = data.text;
+    if (data.meta && data.meta.rag && data.meta.rag.chunks && data.meta.rag.chunks.length) {
+      const srcs = [...new Set(data.meta.rag.chunks.map((c) => c.doc))];
+      const f = document.createElement("div");
+      f.className = "msg-src";
+      f.textContent = "Sources: " + srcs.join(" · ");
+      pending.appendChild(f);
+    }
     renderTurn(data);
   } catch (e) {
     pending.className = "msg err";
@@ -204,6 +243,9 @@ function init() {
   $("model").addEventListener("change", persist);
   $("inspectBtn").addEventListener("click", inspect);
   $("ctxClose").addEventListener("click", () => $("ctxDlg").close());
+  $("compareBtn").addEventListener("click", compare);
+  $("cmpClose").addEventListener("click", () => $("cmpDlg").close());
+  $("topk").addEventListener("input", persist);
   $("resetBtn").addEventListener("click", () => {
     state.session = "pg-" + Math.random().toString(36).slice(2);
     $("messages").innerHTML = '<div class="empty" id="empty"><h3>Conversation reset</h3><p>Ask another question.</p></div>';

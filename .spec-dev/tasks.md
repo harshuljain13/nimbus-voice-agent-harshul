@@ -48,12 +48,13 @@ Chunk + embed the docs into FAISS; retrieve top-k and ground the answer on it.
 - [x] Playground: RAG un-locked in Knowledge source + top-k slider + index status; "This turn" shows rag_ms + retrieved chunks with scores.
 🧪 You test: Knowledge source → RAG, ask "What's the refund policy?" → tiny context (~500 tok vs 23.5k), retrieved chunks + rag_ms; move top-k. (5 tests; live: 265 chunks, 98% smaller prompt)
 
-## Phase 4 — RAG vs RAGless toggle + rerank + viz  (R3 + R5 part 2)  ← NEXT
+## Phase 4 — RAG vs RAGless toggle + rerank + viz  (R3 + R5 part 2)  ✅ DONE
 Make retrieval drive the answer, compare against RAGless, add rerank + the vector picture.
-- [ ] Wire RAG into `/chat` (RAG-grounded answers); `retrieval_mode` toggle (rag | ragless) with latency compare.
-- [ ] `rag/rerank.py` (LLM rerank) + toggle; `rag/viz_math.py` (PCA + KMeans) → `/rag/viz` + query overlay.
-- [ ] `rag.html`: cluster scatter + query overlay.
-🧪 You test: ask the same question in RAG vs RAGless → compare answers + latency; see the vector cluster + your query's nearest chunks.
+- [x] **Compare RAG vs RAGless** button → context/prompt tokens + RAG/LLM/total ms side by side.
+- [x] `rag/rerank.py` (LLM rerank, graceful fallback) + rerank toggle (chat + viz); `rerank_ms` surfaced.
+- [x] `rag/viz_math.py` (numpy PCA + KMeans); `projection.json` at build; `/rag/visualization` + `/rag/query`.
+- [x] `rag.html`: 265-point cluster scatter + query diamond + ranked connectors + hover + rebuild.
+🧪 You test: **Compare RAG vs RAGless** (tokens vs latency); toggle rerank; **Vector map ↗** → run a query, see the nearest chunks light up. (6 tests; live-verified)
 
 ## Phase 5 — LLM controls  (rest of R8)
 Make the brain configurable.

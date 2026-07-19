@@ -12,7 +12,7 @@
   <header class="top">
     <div class="brand">
       <b>Nimbus <span class="grad">Playground</span></b>
-      <span class="phase-chip" id="phaseChip">Phase 3 · RAG</span>
+      <span class="phase-chip" id="phaseChip">Phase 4 · RAG + viz</span>
     </div>
     <div class="top-right">
       <span class="health" id="health"><span class="dot"></span><span id="healthText">connecting…</span></span>
@@ -58,7 +58,9 @@
         <div id="ragOpts" hidden style="margin-top:11px;">
           <label>Top-k chunks <span class="val" id="topkVal">4</span></label>
           <input type="range" id="topk" min="1" max="12" value="4" />
+          <label class="rerank-row"><input type="checkbox" id="rerank" /> Rerank retrieved chunks</label>
           <p class="hint" id="ragStatus">index: checking…</p>
+          <a class="btn ghost small" href="rag.html" target="_blank" rel="noopener" style="margin-top:9px;">Vector map ↗</a>
         </div>
       </div>
 
@@ -72,6 +74,7 @@
         <textarea id="sysPrompt" placeholder="Leave blank for the default Nimbus agent prompt."></textarea>
       </div>
 
+      <button class="btn ghost" id="compareBtn" style="width:100%;margin-bottom:9px;">⚖ Compare RAG vs RAGless</button>
       <div class="btn-row">
         <button class="btn" id="inspectBtn">Inspect context</button>
         <button class="btn ghost" id="resetBtn">Reset</button>
@@ -128,6 +131,16 @@
         <button class="btn small ghost" id="ctxClose">Close</button>
       </div>
       <div class="ctx-body" id="ctxBody"></div>
+    </div>
+  </dialog>
+
+  <!-- RAG vs RAGless comparison -->
+  <dialog id="cmpDlg">
+    <div class="dlg" style="width:min(560px,94vw)">
+      <h2>RAG vs RAGless</h2>
+      <p class="hint" id="cmpQ"></p>
+      <div id="cmpBody"></div>
+      <div class="dlg-actions"><button class="btn ghost" id="cmpClose">Close</button></div>
     </div>
   </dialog>
 

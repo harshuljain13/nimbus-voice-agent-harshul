@@ -175,7 +175,7 @@ async def chat(req: ChatRequest, request: Request) -> dict:
     try:
         return await chat_orch.chat(
             message=req.message, model_key=req.model_key, response_length=req.response_length,
-            use_context=req.use_context, use_rag=req.use_rag, top_k=req.top_k,
+            use_context=req.use_context, use_rag=req.use_rag, top_k=req.top_k, rerank=req.rerank,
             system_prompt=req.system_prompt, temperature=req.temperature, mode=req.mode,
             session_id=req.session_id, headers=headers,
         )
@@ -190,7 +190,7 @@ def inspect(req: ChatRequest, request: Request) -> dict:
     try:
         return chat_orch.inspect(
             message=req.message, response_length=req.response_length, use_context=req.use_context,
-            use_rag=req.use_rag, top_k=req.top_k, system_prompt=req.system_prompt,
+            use_rag=req.use_rag, top_k=req.top_k, rerank=req.rerank, system_prompt=req.system_prompt,
             model_key=req.model_key, api_key=api_key,
         )
     except chat_orch.ChatError as e:
@@ -235,6 +235,7 @@ def session_reset(req: SessionRef) -> dict:
 class RetrieveRequest(BaseModel):
     query: str
     k: int = 4
+    rerank: bool = False
 
 
 @app.get("/rag/status")
@@ -255,11 +256,33 @@ def rag_build(request: Request) -> dict:
 
 @app.post("/rag/retrieve")
 def rag_retrieve(req: RetrieveRequest, request: Request) -> dict:
-    """Top-k chunks for a query (for testing + the Phase 4 visualization)."""
+    """Top-k chunks for a query (for testing + programmatic use)."""
     api_key = config.resolve_key("openai", _headers_lower(request))
     try:
         rag_service.ensure_built(api_key)
-        res = rag_service.query(req.query, k=req.k, api_key=api_key)
+        res = rag_service.query(req.query, k=req.k, do_rerank=req.rerank, api_key=api_key)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {"results": res["results"], "latency": res["latency"], "k": res["k"]}
+    return {"results": res["results"], "latency": res["latency"], "k": res["k"], "reranked": res["reranked"]}
+
+
+@app.get("/rag/visualization")
+def rag_visualization() -> dict:
+    """The precomputed 2D scatter of all chunk vectors (PCA) + cluster labels — for rag.html."""
+    if not rag_index.is_built():
+        raise HTTPException(status_code=409, detail="RAG index not built. POST /rag/build first.")
+    proj = rag_index.projection()
+    return {"points": proj["points"], "cluster_labels": proj["cluster_labels"],
+            "clusters": proj["clusters"], "model": proj["model"], "dim": proj["dim"],
+            "profile": proj["profile"]}
+
+
+@app.post("/rag/query")
+def rag_query(req: RetrieveRequest, request: Request) -> dict:
+    """Retrieve + project the query into 2D (query point + retrieved ids) for the viz overlay."""
+    api_key = config.resolve_key("openai", _headers_lower(request))
+    try:
+        rag_service.ensure_built(api_key)
+        return rag_service.query_with_viz(req.query, k=req.k, do_rerank=req.rerank, api_key=api_key)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))

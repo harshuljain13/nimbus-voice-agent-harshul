@@ -162,3 +162,35 @@ Contract converged on the reference (`message`/`model_key`/`use_context`, `{text
 ### Notes
 - Rerank + the 2D vector visualization are Phase 4 (this phase is retrieval + chat integration).
 - `light` profile (OpenAI embeddings) is default; `rich` (local MiniLM) is opt-in for Phase 4 viz.
+
+---
+
+## Phase 4 — RAG vs RAGless + rerank + 2D viz ✅
+
+### Automated (`backend/tests/test_phase4.py`) — 6 passing (embeddings/LLM/rerank mocked, offline)
+| # | Test | Verifies |
+|---|------|----------|
+| 4.1 | `test_viz_math_pca_and_kmeans` | PCA → mean[D] + components[2,D]; project → (N,2); kmeans labels in range |
+| 4.2 | `test_index_builds_2d_projection` | build writes `projection.json`: points{x,y,cluster} = chunks; 8 cluster labels; `project_query` |
+| 4.3 | `test_llm_rerank_reorders_and_falls_back` | LLM rerank applies the returned order; no key → graceful fallback to vector order |
+| 4.4 | `test_service_rerank_records_latency` | `query(do_rerank=True)` → `reranked=True`, `rerank_ms` recorded |
+| 4.5 | `test_viz_and_query_endpoints` | `/rag/visualization` points + cluster_labels; `/rag/query` query_point + retrieved_ids |
+| 4.6 | `test_chat_rerank_flag` | `/chat use_rag rerank=true` → `meta.rag.reranked` true |
+
+### Live evaluation (real OpenAI, key from `.env`)
+- Rebuild → 265 points, **8 clusters** labeled (Pricing, FAQ, Finance & Accounting, Company + Terms…).
+- `/rag/query "how do refunds work"` → query projected; nearest = refund/Refund Policy, terms/Cancellation, faq.
+- Rerank on → `rerank_ms` ≈ 900 ms (an LLM ordering call); answer stays correct.
+
+### Manual (playground) — checklist
+- [ ] **Knowledge source → RAG** → **⚖ Compare RAG vs RAGless** → table: context tokens (~500 vs 23.5k), prompt/RAG/LLM/total ms + the "why totals are close" note.
+- [ ] Toggle **Rerank retrieved chunks**, re-ask → `rerank_ms` appears in "This turn".
+- [ ] RAG answers show a **Sources: doc · doc** line under the reply (from the retrieved chunks; RAG mode only).
+- [ ] **Vector map ↗** → `rag.html`: 265-point cluster scatter renders; legend names 8 clusters.
+- [ ] Type a query → **Run query** → white **query diamond** + amber connectors to ranked nearest chunks; right panel lists them + latency breakdown.
+- [ ] **Hover** a point → reads its chunk; **k** box + **rerank** change retrieval; **Rebuild index** works.
+
+### Edge cases covered
+- Rerank failure (bad JSON / no key) → falls back to vector order, never breaks a turn.
+- Viz requested before build → 409 with guidance.
+- Query projected into the *same* PCA space as the chunks (fit once at build).
