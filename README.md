@@ -9,6 +9,9 @@ Repo: **github.com/harshuljain13/nimbus-voice-agent-harshul** ·
 Target/reference: [`VizuaraAI/nimbus-voice-agent`](https://github.com/VizuaraAI/nimbus-voice-agent)
 (see [`.spec-dev/reference.md`](.spec-dev/reference.md)).
 
+**Live:** backend → https://nimbus-voice-agent-harshul.onrender.com (Render free tier — the first
+request after idle wakes it, ~50s). Frontend (site + playground + RAG viz) → Vercel (one app).
+
 > Nimbus is a made-up company; all names, prices, and policies are invented for teaching.
 
 ## Status (7 of 13 phases done · 48 tests passing)

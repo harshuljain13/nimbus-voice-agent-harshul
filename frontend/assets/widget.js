@@ -3,7 +3,9 @@
 //   before a turn: push the site cart → agent (so it sees what you clicked on the site)
 //   after a turn:  pull the agent cart → site + repaint the drawer (so you WATCH it change)
 
-const BASE = (localStorage.getItem("nimbus_backend_url") || "http://localhost:8100").replace(/\/$/, "");
+const _isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+const BASE = (localStorage.getItem("nimbus_backend_url") ||
+  (_isLocal ? "http://localhost:8100" : "https://nimbus-voice-agent-harshul.onrender.com")).replace(/\/$/, "");
 const CART_KEY = "nimbus_cart";
 const SID_KEY = "nimbus_agent_session";
 
