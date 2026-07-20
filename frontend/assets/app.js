@@ -200,6 +200,8 @@ export async function bootstrap(active, renderFn) {
     observeReveals();
     // Client-side cart (localStorage); loaded lazily so browsing never blocks on it.
     import("./cart.js").then((m) => m.mountCart()).catch(() => {});
+    // "Talk to Nimbus" voice-agent widget (Phase 12 / R14); bridged to the same cart.
+    import("./widget.js").then((m) => m.mountWidget()).catch(() => {});
   } catch (err) {
     console.error(err);
     const main = document.querySelector("#app") || document.body;

@@ -89,9 +89,10 @@ Note: interrupt `[cancelled by user]` moves to Phase 10 (voice loop, where barge
 - [ ] Combine every stage into a pie/bar of % contribution + total ms; highlight the biggest stage.
 🧪 You test: after a turn, see the breakdown chart — which stage cost the most.
 
-## Phase 12 — Playground finalize + landing widget + deploy  (R14)
-- [ ] Polish the playground; `assets/widget.js` "Talk to Nimbus" chatbox on the landing page bridged to the cart; deploy backend → Railway, frontend already on Vercel.
-🧪 You test: use the finalized widget on the Nimbus landing page; everything works against the deployed backend.
+## Phase 12 — Playground finalize + landing widget + deploy  (R14)  ◧ PARTIAL (brought forward)
+- [x] **`assets/widget.js` "Talk to Nimbus" chatbox on the site** (all pages), tool-enabled, **bridged to the site cart both ways**: pushes `nimbus_cart` → agent before a turn, syncs agent cart → `nimbus_cart` + repaints the drawer after. `POST /cart/set` seeds the session cart; `/cart` returns `product_id`.
+- [ ] Polish the playground further; deploy backend → Railway, frontend → Vercel (against the deployed backend).
+🧪 You test: on the Nimbus site, open **💬 Talk to Nimbus**, say "add Nimbus CRM Professional" → watch the site's **cart drawer** update live; "remove it" → it disappears. (widget + cart bridge done; deploy remains)
 
 ## Out of scope
 - Public phone number / Twilio (no key); Anthropic (no key); real payments.

@@ -92,6 +92,9 @@ export function mountCart() {
   drawer.querySelector(".cart-checkout").addEventListener("click", checkout);
 
   paint(load());
+
+  // Let the voice-agent widget repaint the drawer after it syncs nimbus_cart (Phase 12 bridge).
+  window.__nimbusCart = { open: openCart, refresh: () => paint(load()) };
 }
 
 // ---- drawer ----

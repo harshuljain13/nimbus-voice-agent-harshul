@@ -241,9 +241,44 @@ def tools() -> dict:
 def cart(session_id: str = Query("")) -> dict:
     """The session's cart (Phase 7) — item shape mirrors the site's nimbus_cart."""
     items = cart_store.get(session_id)
-    return {"items": [{"product_name": i["product_name"], "tier": i["tier"], "seats": i["seats"],
-                       "price_monthly": i["price_monthly"]} for i in items],
+    return {"items": [{"product_id": i["product_id"], "product_name": i["product_name"], "tier": i["tier"],
+                       "seats": i["seats"], "price_monthly": i["price_monthly"]} for i in items],
             "monthly_total": sum(i["price_monthly"] * i["seats"] for i in items)}
+
+
+class CartSetItem(BaseModel):
+    product_id: str | None = None
+    product_name: str | None = None
+    tier: str | None = None
+    seats: int = 1
+
+
+class CartSetRequest(BaseModel):
+    session_id: str
+    items: list[CartSetItem] = Field(default_factory=list)
+
+
+@app.post("/cart/set")
+def cart_set(req: CartSetRequest) -> dict:
+    """Replace a session's cart from the browser's nimbus_cart (site → agent sync, Phase 12).
+
+    Prices are re-resolved from the catalog so monthly/annual stay correct regardless of what the
+    site stored.
+    """
+    from .tools import catalog_data as cat
+    cart_store.clear(req.session_id)
+    for it in req.items:
+        p = cat.resolve_product(it.product_id or it.product_name or "")
+        if not p:
+            continue
+        t = cat.resolve_tier(p, it.tier)
+        if not t:
+            continue
+        item = {"product_id": p["id"], "product_name": p["name"], "tier": t["name"],
+                "price_monthly": float(t.get("priceMonthly") or 0),
+                "price_annual_monthly": float(t.get("priceAnnualMonthly") or t.get("priceMonthly") or 0)}
+        cart_store.add(req.session_id, item, max(1, int(it.seats or 1)))
+    return {"ok": True, "count": len(cart_store.get(req.session_id))}
 
 
 @app.post("/session/reset")
