@@ -12,7 +12,7 @@ const state = {
   keys: load(LS_KEYS),
   length: "medium",
   knowledge: "ragless",
-  mode: "batch",
+  mode: "stream",
   session: "pg-" + Math.random().toString(36).slice(2),
   busy: false,
 };
@@ -163,7 +163,8 @@ async function send(message) {
   const pending = addMsg("bot pending", "…");
   setBusy(true);
   try {
-    if (state.mode === "stream") await streamTurn(message, pending);
+    // tools run in batch only, so a tools-on turn falls back to batch even in streaming mode
+    if (state.mode === "stream" && !$("toolsOn").checked) await streamTurn(message, pending);
     else await batchTurn(message, pending);
   } catch (e) {
     pending.className = "msg err";
