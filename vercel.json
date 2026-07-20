@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/", "destination": "/frontend/index.html" },
+    { "source": "/index.html", "destination": "/frontend/index.html" },
+    { "source": "/about.html", "destination": "/frontend/about.html" },
+    { "source": "/products.html", "destination": "/frontend/products.html" },
+    { "source": "/product.html", "destination": "/frontend/product.html" },
+    { "source": "/pricing.html", "destination": "/frontend/pricing.html" },
+    { "source": "/support.html", "destination": "/frontend/support.html" },
+    { "source": "/assets/:path*", "destination": "/frontend/assets/:path*" },
+    { "source": "/data/:path*", "destination": "/frontend/data/:path*" }
+  ]
+}

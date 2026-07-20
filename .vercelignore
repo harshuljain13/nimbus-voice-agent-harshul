@@ -1,0 +1,8 @@
+# Vercel deploys the static frontend only; the backend runs on Railway.
+backend/
+.spec-dev/
+scripts/
+notebooks/
+Makefile
+*.md
+.serena/
