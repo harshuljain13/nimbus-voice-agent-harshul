@@ -10,8 +10,8 @@ Detailed design doc (report) for every phase. Each follows the same structure:
 | 2 | [phase-02-ragless-chat.md](phase-02-ragless-chat.md) | R6 + R8 core | ✅ Done |
 | 3 | [phase-03-rag-retrieval.md](phase-03-rag-retrieval.md) | R5 (retrieval) | ✅ Done |
 | 4 | [phase-04-rag-vs-ragless.md](phase-04-rag-vs-ragless.md) | R3 + R5 (rerank/viz) | ✅ Done |
-| 5 | phase-05-llm-controls.md | R8 | ▶ Next |
-| 6 | phase-06-streaming-vs-batch.md | R4 | ◻ Planned |
+| 5 | [phase-05-llm-controls.md](phase-05-llm-controls.md) | R8 | ✅ Done |
+| 6 | phase-06-streaming-vs-batch.md | R4 | ▶ Next |
 | 7 | phase-07-tools.md | R2 + R9 | ◻ Planned |
 | 8 | phase-08-asr.md | R7 | ◻ Planned |
 | 9 | phase-09-tts.md | R10 | ◻ Planned |

@@ -176,8 +176,8 @@ async def chat(req: ChatRequest, request: Request) -> dict:
         return await chat_orch.chat(
             message=req.message, model_key=req.model_key, response_length=req.response_length,
             use_context=req.use_context, use_rag=req.use_rag, top_k=req.top_k, rerank=req.rerank,
-            system_prompt=req.system_prompt, temperature=req.temperature, mode=req.mode,
-            session_id=req.session_id, headers=headers,
+            verbatim_turns=req.verbatim_turns, system_prompt=req.system_prompt,
+            temperature=req.temperature, mode=req.mode, session_id=req.session_id, headers=headers,
         )
     except chat_orch.ChatError as e:
         raise HTTPException(status_code=e.status, detail=e.message)
@@ -190,8 +190,9 @@ def inspect(req: ChatRequest, request: Request) -> dict:
     try:
         return chat_orch.inspect(
             message=req.message, response_length=req.response_length, use_context=req.use_context,
-            use_rag=req.use_rag, top_k=req.top_k, rerank=req.rerank, system_prompt=req.system_prompt,
-            model_key=req.model_key, api_key=api_key,
+            use_rag=req.use_rag, top_k=req.top_k, rerank=req.rerank, verbatim_turns=req.verbatim_turns,
+            system_prompt=req.system_prompt, model_key=req.model_key, session_id=req.session_id,
+            api_key=api_key,
         )
     except chat_orch.ChatError as e:
         raise HTTPException(status_code=e.status, detail=e.message)
@@ -199,17 +200,13 @@ def inspect(req: ChatRequest, request: Request) -> dict:
 
 @app.get("/models")
 def models(request: Request) -> dict:
-    """Model registry for the picker: which model keys exist and which are usable now."""
+    """Model registry for the picker: which model keys exist and which have a usable key."""
     avail = config.provider_availability(_headers_lower(request))
-    out = []
-    for key, spec in config.LLM_MODELS.items():
-        supported = spec["provider"] == "openai"        # Gemini lands in Phase 5
-        out.append({
-            "key": key,
-            "label": _MODEL_LABELS.get(key, key) + ("" if supported else " (Phase 5)"),
-            "available": supported and avail.get(spec["provider"], False),
-        })
-    return {"models": out}
+    return {"models": [
+        {"key": key, "label": _MODEL_LABELS.get(key, key), "provider": spec["provider"],
+         "available": avail.get(spec["provider"], False)}
+        for key, spec in config.LLM_MODELS.items()
+    ]}
 
 
 # Stubs so the reference playground loads cleanly; each lights up in its phase.
@@ -225,7 +222,10 @@ def cart(session_id: str = Query("")) -> dict:
 
 @app.post("/session/reset")
 def session_reset(req: SessionRef) -> dict:
-    return {"ok": True}                                 # server session/history → Phase 5
+    """Clear a session's conversation history (Phase 5)."""
+    if req.session_id:
+        chat_orch.HISTORY.reset(req.session_id)
+    return {"ok": True}
 
 
 # --------------------------------------------------------------------------- #

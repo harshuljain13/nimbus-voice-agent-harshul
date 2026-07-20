@@ -11,16 +11,13 @@ from typing import Any
 
 import httpx
 
+from .base import ProviderError
+
 API_URL = "https://api.openai.com/v1/chat/completions"
 
 
-class OpenAIError(RuntimeError):
-    """A failed OpenAI call, carrying an HTTP-ish status for the API layer to surface."""
-
-    def __init__(self, status: int, message: str) -> None:
-        super().__init__(message)
-        self.status = status
-        self.message = message
+class OpenAIError(ProviderError):
+    """A failed OpenAI call (subclass of ProviderError so the orchestrator catches it generically)."""
 
 
 async def complete(

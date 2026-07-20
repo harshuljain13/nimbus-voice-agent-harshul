@@ -12,7 +12,7 @@
   <header class="top">
     <div class="brand">
       <b>Nimbus <span class="grad">Playground</span></b>
-      <span class="phase-chip" id="phaseChip">Phase 4 · RAG + viz</span>
+      <span class="phase-chip" id="phaseChip">Phase 5 · LLM controls</span>
     </div>
     <div class="top-right">
       <span class="health" id="health"><span class="dot"></span><span id="healthText">connecting…</span></span>
@@ -67,6 +67,12 @@
       <div class="field">
         <label>Temperature <span class="val" id="tempVal">0.3</span></label>
         <input type="range" id="temp" min="0" max="20" value="3" />
+      </div>
+
+      <div class="field">
+        <label>Conversation memory <span class="val" id="verbatimVal">6</span> msgs</label>
+        <input type="range" id="verbatim" min="0" max="20" value="6" />
+        <p class="hint">Keep the last N messages verbatim; older ones fold into a rolling summary.</p>
       </div>
 
       <div class="field">

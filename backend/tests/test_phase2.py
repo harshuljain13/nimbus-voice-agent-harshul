@@ -127,12 +127,12 @@ def test_inspect_returns_messages_and_token_totals(fake_openai):
     assert d["messages"][1]["content"] == "hi there"
 
 
-def test_models_lists_openai_available_gemini_deferred():
+def test_models_lists_availability_by_key():
     d = client.get("/models").json()
     by_key = {m["key"]: m for m in d["models"]}
-    assert by_key["openai-lite"]["available"] is True          # key present in env
-    assert by_key["gemini-flash"]["available"] is False        # Phase 5
-    assert "Phase 5" in by_key["gemini-pro"]["label"]
+    assert by_key["openai-lite"]["available"] is True          # OpenAI key present in env
+    assert by_key["gemini-flash"]["provider"] == "gemini"      # Gemini is a real provider now (Phase 5)
+    # gemini availability just reflects whether a key is present (no hard-coded "deferred")
 
 
 def test_health_reports_corpus_and_stubs_load():

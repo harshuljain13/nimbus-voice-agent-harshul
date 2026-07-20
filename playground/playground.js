@@ -45,6 +45,7 @@ function payload(message) {
     model_key: $("model").value, response_length: state.length,
     use_context: state.knowledge === "ragless", use_rag: state.knowledge === "rag",
     top_k: Number($("topk").value), rerank: $("rerank").checked,
+    verbatim_turns: Number($("verbatim").value),
     temperature: Number($("temp").value) / 10,
     system_prompt: $("sysPrompt").value.trim() || null,
   };
@@ -55,9 +56,9 @@ async function compare() {
   $("cmpQ").textContent = `“${q}”`;
   $("cmpBody").innerHTML = "<p class='stat-empty'>running both…</p>";
   $("cmpDlg").showModal();
-  const base = { session_id: state.session, message: q, mode: "batch", model_key: $("model").value,
+  const base = { session_id: null, message: q, mode: "batch", model_key: $("model").value,
     response_length: state.length, temperature: Number($("temp").value) / 10, system_prompt: null,
-    top_k: Number($("topk").value) };
+    top_k: Number($("topk").value) };  // session_id null → compare doesn't pollute the conversation
   const run = async (cfg) => {
     const r = await fetch(state.base + "/chat", { method: "POST", headers: authHeaders(), body: JSON.stringify({ ...base, ...cfg }) });
     const d = await r.json(); if (!r.ok) throw new Error(d.detail || "failed"); return d;
@@ -132,6 +133,7 @@ function renderTurn(data) {
     kv("Prompt tokens", n(meta.prompt_tokens)) +
     kv("Output tokens", n(meta.completion_tokens)) +
     kv("Model", meta.model) +
+    kv("Memory", (meta.verbatim_messages || 0) + " verbatim" + (meta.summary_used ? " + summary" : "")) +
     chunks;
 }
 
@@ -239,6 +241,7 @@ function init() {
   });
   $("topk").addEventListener("input", (e) => { $("topkVal").textContent = e.target.value; persist(); });
   $("temp").addEventListener("input", (e) => { $("tempVal").textContent = (e.target.value / 10).toFixed(1); persist(); });
+  $("verbatim").addEventListener("input", (e) => { $("verbatimVal").textContent = e.target.value; persist(); });
   $("sysPrompt").addEventListener("input", persist);
   $("model").addEventListener("change", persist);
   $("inspectBtn").addEventListener("click", inspect);
@@ -246,7 +249,8 @@ function init() {
   $("compareBtn").addEventListener("click", compare);
   $("cmpClose").addEventListener("click", () => $("cmpDlg").close());
   $("topk").addEventListener("input", persist);
-  $("resetBtn").addEventListener("click", () => {
+  $("resetBtn").addEventListener("click", async () => {
+    try { await fetch(state.base + "/session/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: state.session }) }); } catch {}
     state.session = "pg-" + Math.random().toString(36).slice(2);
     $("messages").innerHTML = '<div class="empty" id="empty"><h3>Conversation reset</h3><p>Ask another question.</p></div>';
     $("turn").innerHTML = '<p class="stat-empty">Send a message to see latency &amp; tokens.</p>';

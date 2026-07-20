@@ -194,3 +194,34 @@ Contract converged on the reference (`message`/`model_key`/`use_context`, `{text
 - Rerank failure (bad JSON / no key) → falls back to vector order, never breaks a turn.
 - Viz requested before build → 409 with guidance.
 - Query projected into the *same* PCA space as the chunks (fit once at build).
+
+---
+
+## Phase 5 — LLM controls (providers · history · RAG-routing) ✅
+
+### Automated (`backend/tests/test_phase5.py`) — 7 passing (LLM mocked, offline)
+| # | Test | Verifies |
+|---|------|----------|
+| 5.1 | `test_split_for_context` | last-N verbatim split (N, 0, and > len edge cases) |
+| 5.2 | `test_multi_turn_history_threaded_into_prompt` | turn 2's prompt contains turn 1's user + assistant messages |
+| 5.3 | `test_history_isolated_per_session` | session B's prompt has none of session A's content |
+| 5.4 | `test_summary_kicks_in_beyond_verbatim` | past the verbatim window → `summary_used`, `summarized_messages>0`, `verbatim_messages≤N` |
+| 5.5 | `test_session_reset_clears_history` | after `/session/reset`, prior turns no longer appear in the prompt |
+| 5.6 | `test_gemini_message_mapping` | system→systemInstruction; user/assistant→user/model |
+| 5.7 | `test_chat_routes_to_gemini` | `model_key=gemini-flash` + `X-Gemini-Key` → provider gemini, key routed |
+
+### Live evaluation (real OpenAI, key from `.env`)
+- 2-turn: "My name is Harshul… Nimbus CRM Professional" → "what product + name?" → recalls both ✅ (`2 verbatim`).
+- `/models` lists `gemini-flash`/`gemini-pro` (available=false — no Gemini key yet).
+
+### Manual (playground) — checklist
+- [ ] **Knowledge source → None**; say "My name is Harshul and I love Nimbus CRM.", then "What's my name and which product?" → recalls both; "This turn" shows **Memory: N verbatim**.
+- [ ] RAGless/RAG follow-up: "How much is Nimbus CRM Professional?" → "What about annually?" → resolves "that" from memory.
+- [ ] Set **Conversation memory** slider low (2) + chat several turns → readout shows **+ summary**.
+- [ ] **Reset** clears the conversation (server history too).
+- [ ] **Gemini** appears in the Model picker (greyed until a `GEMINI_API_KEY` is added).
+
+### Edge cases covered
+- Summarization is best-effort — a failed summary keeps the previous one, never breaks the turn.
+- Answer model can be Gemini while embeddings/rerank/summary stay on OpenAI (separate keys).
+- Interrupt marker `[cancelled by user]` deferred to Phase 10 (barge-in).

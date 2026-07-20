@@ -56,13 +56,15 @@ Make retrieval drive the answer, compare against RAGless, add rerank + the vecto
 - [x] `rag.html`: 265-point cluster scatter + query diamond + ranked connectors + hover + rebuild.
 🧪 You test: **Compare RAG vs RAGless** (tokens vs latency); toggle rerank; **Vector map ↗** → run a query, see the nearest chunks light up. (6 tests; live-verified)
 
-## Phase 5 — LLM controls  (rest of R8)
-Make the brain configurable.
-- [ ] Providers OpenAI lite/heavy + Gemini flash/pro (picker); system-prompt editor; response length low/med/high.
-- [ ] History: last-N verbatim (slider) + rolling summary; RAG-routing rules in prompt; context inspector (`/context/preview` → exact prompt + token count); interrupt `[cancelled by user]`.
-🧪 You test: switch provider, edit the system prompt, set length, set history N, open the inspector to see the exact prompt + tokens.
+## Phase 5 — LLM controls  (rest of R8)  ✅ DONE
+Make the brain configurable + conversational.
+- [x] **Gemini provider** (flash/pro) behind one `complete()` shape; provider dispatch; `/models` lists it (key-gated). (system-prompt editor + length were done in Phase 2.)
+- [x] **Conversation history**: last-N verbatim (slider) + rolling summary of older turns; `verbatim_turns`; `meta.verbatim_messages/summarized_messages/summary_used`.
+- [x] **RAG-routing** rule in the system prompt; `/session/reset` clears history; inspector shows summary + recent turns.
+🧪 You test: (None mode) "My name is Harshul, I love Nimbus CRM" → "what's my name + product?" recalls both; lower the memory slider to see a summary form; Gemini appears in the picker.
+Note: interrupt `[cancelled by user]` moves to Phase 10 (voice loop, where barge-in lives).
 
-## Phase 6 — Streaming vs batch  (R4)
+## Phase 6 — Streaming vs batch  (R4)  ← NEXT
 - [ ] Streaming path (`stream()`, `llm_ttft_ms`) + batch (`llm_total_ms`); mode toggle + side-by-side comparison.
 🧪 You test: flip streaming/batch → see time-to-first-token vs total latency compared.
 
