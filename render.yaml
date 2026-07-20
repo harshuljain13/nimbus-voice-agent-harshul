@@ -1,0 +1,16 @@
+# Free FastAPI backend on Render (alternative to Railway's now-paid plan).
+# Deploy: render.com → New → Blueprint → pick this repo. Render reads this file.
+# (Set your own OpenAI key later, or keep REQUIRE_USER_KEYS=true so visitors bring their own.)
+services:
+  - type: web
+    name: nimbus-voice-agent-harshul
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: EMBEDDING_PROFILE
+        value: light
+      - key: REQUIRE_USER_KEYS
+        value: "true"

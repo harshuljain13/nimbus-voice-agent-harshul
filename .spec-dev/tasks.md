@@ -1,10 +1,13 @@
 # Tasks: Nimbus Voice Agent
 
 > **North star: [`reference.md`](reference.md)** — every phase builds toward the instructor's
-> shipped playground + API contract. Playground work matches the reference's dark 3-column
-> control-panel design; future-phase controls are shown-but-disabled and light up per phase.
+> shipped playground + API contract. Playground work matches the reference's dark control-panel
+> design; controls are added incrementally per phase (no disabled stubs).
 
 ## Status
+**Phases 0–7 ✅ done (48 tests). Phase 12 widget + two-way cart bridge ✅ (deploy pending).
+Phases 8–11 (voice + dashboard) planned.** Pushed to `github.com/harshuljain13/nimbus-voice-agent-harshul`.
+
 [ ] Not started  [~] In progress  [x] Done
 
 ## How this is organized
