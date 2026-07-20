@@ -13,6 +13,31 @@ function sessionId() {
   return s;
 }
 function siteCart() { try { return JSON.parse(localStorage.getItem(CART_KEY) || "[]"); } catch { return []; } }
+function agentKeys() { try { return JSON.parse(localStorage.getItem("nimbus_pg_keys") || "{}"); } catch { return {}; } }
+function wHeaders() {
+  const h = { "Content-Type": "application/json" };
+  const k = agentKeys();
+  if (k.openai) h["X-OpenAI-Key"] = k.openai;
+  if (k.gemini) h["X-Gemini-Key"] = k.gemini;
+  return h;
+}
+function promptForKey(pending) {
+  pending.textContent = "This demo runs on your own OpenAI key (stored only in your browser):";
+  const wrap = document.createElement("div");
+  wrap.style = "display:flex;gap:6px;margin-top:8px";
+  const inp = document.createElement("input");
+  inp.type = "password"; inp.placeholder = "sk-…";
+  inp.style = "flex:1;border:1px solid #d9dce6;border-radius:8px;padding:7px 9px;font:inherit";
+  const b = document.createElement("button");
+  b.textContent = "Save";
+  b.style = "border:0;border-radius:8px;padding:7px 12px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;cursor:pointer";
+  b.onclick = () => {
+    const v = inp.value.trim(); if (!v) return;
+    const k = agentKeys(); k.openai = v; localStorage.setItem("nimbus_pg_keys", JSON.stringify(k));
+    pending.textContent = "Key saved — ask me again!";
+  };
+  wrap.append(inp, b); pending.append(wrap); inp.focus();
+}
 
 const STYLE = `
 .nbw-btn{position:fixed;right:22px;bottom:22px;z-index:9998;width:58px;height:58px;border:0;border-radius:50%;
@@ -75,7 +100,7 @@ export function mountWidget() {
 
   async function syncSiteToAgent() {
     const items = siteCart().map((i) => ({ product_id: i.product_id, product_name: i.product_name, tier: i.tier, seats: i.seats }));
-    try { await fetch(BASE + "/cart/set", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sessionId(), items }) }); } catch {}
+    try { await fetch(BASE + "/cart/set", { method: "POST", headers: wHeaders(), body: JSON.stringify({ session_id: sessionId(), items }) }); } catch {}
   }
   async function syncAgentToSite() {
     try {
@@ -91,11 +116,14 @@ export function mountWidget() {
     const pending = add("bot", "…");
     try {
       await syncSiteToAgent();
-      const r = await fetch(BASE + "/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      const r = await fetch(BASE + "/chat", { method: "POST", headers: wHeaders(),
         body: JSON.stringify({ session_id: sessionId(), message, use_context: true, use_rag: false,
           tools_enabled: true, response_length: "low", verbatim_turns: 8 }) });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) { pending.textContent = data.detail || "Something went wrong."; return; }
+      if (!r.ok) {
+        if (r.status === 400 && /key/i.test(data.detail || "")) return promptForKey(pending);
+        pending.textContent = data.detail || "Something went wrong."; return;
+      }
       pending.textContent = data.text;
       (data.meta && data.meta.tool_calls || []).forEach((t) => add("tool", "🔧 " + t.name));
       await syncAgentToSite();

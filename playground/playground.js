@@ -234,9 +234,11 @@ async function refreshCart() {
 // ---- backend status ----
 async function refreshHealth() {
   try {
-    const d = await (await fetch(state.base + "/health")).json();
-    $("health").className = "health ok";
-    $("healthText").textContent = "backend online";
+    const d = await (await fetch(state.base + "/health", { headers: authHeaders() })).json();
+    state.requireKeys = !!d.require_user_keys;
+    const needKey = d.require_user_keys && !state.keys.openai;
+    $("health").className = needKey ? "health bad" : "health ok";
+    $("healthText").textContent = needKey ? "add your OpenAI key →" : "backend online";
     $("kbSub").textContent = d.corpus.context_built
       ? `${d.corpus.doc_count} docs · context.md ready`
       : "not built — run `make scrape`";
@@ -248,7 +250,7 @@ async function refreshHealth() {
 }
 async function loadModels() {
   try {
-    const d = await (await fetch(state.base + "/models")).json();
+    const d = await (await fetch(state.base + "/models", { headers: authHeaders() })).json();
     $("model").innerHTML = "";
     for (const m of d.models) {
       const o = document.createElement("option");
@@ -307,6 +309,8 @@ function seg(id, onPick) {
 }
 function initKeys() {
   const dlg = $("keysDlg");
+  $("health").style.cursor = "pointer";
+  $("health").addEventListener("click", () => $("keysBtn").click());
   $("keysBtn").addEventListener("click", () => {
     $("k_openai").value = state.keys.openai || "";
     $("k_gemini").value = state.keys.gemini || "";

@@ -63,6 +63,7 @@ def health(request: Request) -> dict:
         "status": "ok",
         "version": __version__,
         "embedding_profile": config.EMBEDDING_PROFILE,
+        "require_user_keys": config.REQUIRE_USER_KEYS,
         "providers": config.provider_availability(headers),
         "llm_models": list(config.LLM_MODELS.keys()),
         "corpus": {"doc_count": _corpus_doc_count(),

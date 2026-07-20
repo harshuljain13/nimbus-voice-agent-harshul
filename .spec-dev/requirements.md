@@ -55,7 +55,10 @@ order — Requirement N is delivered by Phase N.**
 ### Cross-cutting requirements (present from the start, not a phase)
 - **CC1 — Frontend-settable keys**: Provider keys enterable in the browser and sent per-request
   (`X-OpenAI-Key` / `X-Gemini-Key` / `X-ElevenLabs-Key`), stored in `localStorage`, precedence
-  over `.env`. Single-user local dev tool — do not ship key entry on a public deploy ungated.
+  over `.env`. **Public-deploy safety (implemented):** the `REQUIRE_USER_KEYS=true` env flag makes
+  the backend ignore its own `.env` keys so every visitor must bring their own — set it on the
+  Railway deploy so the owner's key is never spent by the public. Off locally. (Diverges from the
+  reference, which always falls back to the server key.)
 - **CC2 — Latency everywhere**: Every stage emits `latency_ms` from the phase it first appears.
 - **CC3 — Build the backend fresh**: implement ASR/LLM/TTS/history/latency directly against
   provider SDKs/APIs (the course Colab notebooks are not reused).

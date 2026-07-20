@@ -69,3 +69,9 @@ make test        # pytest (Phases 0–2: 23 tests)
 ## Deploy (later — Phase 12)
 
 Backend → Railway; frontend + playground → Vercel. `EMBEDDING_PROFILE=light` on Railway.
+
+**Public deploy — don't expose your own key.** Set **`REQUIRE_USER_KEYS=true`** on the backend
+(Railway). Then the server *ignores* its own `.env` keys and every visitor must enter their own
+key (playground **API keys** dialog / widget key prompt), sent per-request as `X-OpenAI-Key`. Leave
+it unset locally to use your `.env` for convenience. (Improves on the reference, which always falls
+back to the server key.)
