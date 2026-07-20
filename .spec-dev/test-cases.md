@@ -275,3 +275,30 @@ Contract converged on the reference (`message`/`model_key`/`use_context`, `{text
 - Disabled tool → refused at dispatch AND never advertised (two layers).
 - Any handler/arg failure returns a safe dict — never crashes the turn.
 - tools_enabled with no subset → all tools; a subset narrows it.
+
+---
+
+## Phase 8 — ASR / voice input ✅
+
+### Automated (`backend/tests/test_phase8.py`) — 5 passing (transcode + provider HTTP mocked)
+| # | Test | Verifies |
+|---|------|----------|
+| 8.1 | `test_transcribe_openai` | transcode → OpenAI → `{text, asr_ms, provider}` |
+| 8.2 | `test_transcribe_gemini` | Gemini response parsing (candidates→parts→text) |
+| 8.3 | `test_transcribe_guards` | unknown provider / missing key / empty audio → ASRError |
+| 8.4 | `test_asr_endpoint` | `POST /asr` (multipart) → `{text, asr_ms}` |
+| 8.5 | `test_asr_endpoint_unknown_provider` | bad provider → 400 |
+
+### Live evaluation (real OpenAI ASR)
+- macOS `say` clip "Add Nimbus CRM Professional to my cart" → `/asr` (openai) → **exact transcript**, ~3s (transcode + transcribe).
+
+### Manual (playground) — checklist
+- [ ] **Voice input (ASR) → Browser** (no key): click **🎤**, allow mic, say something, click 🎤 → words fill the input; hint shows `browser · Nms`. (Chrome/Edge)
+- [ ] **→ OpenAI** (with your key): 🎤 → speak → stop → transcript appears with `openai · Nms`.
+- [ ] Gemini / ElevenLabs work with their keys (add ElevenLabs in **API keys**).
+- [ ] Transcript fills the input (not auto-sent) → review → **Send**.
+
+### Notes
+- Browser ASR is client-side (Web Speech); OpenAI/Gemini/ElevenLabs upload audio to `/asr`.
+- Audio transcoded to 16 kHz mono WAV (ffmpeg via `imageio-ffmpeg` — no apt needed on Render).
+- Live waveform/spectrogram + the full voice loop (barge-in) are Phase 10.

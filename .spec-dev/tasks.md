@@ -76,11 +76,13 @@ Note: interrupt `[cancelled by user]` moves to Phase 10 (voice loop, where barge
 - [x] Master on/off + per-tool All/None/subset (R2 — enforced at dispatch **and** never advertised); tool trace + live cart in the UI.
 🧪 You test: tools on → "add 3 seats of CRM Professional + total" → $135, cart fills; "annual savings?" → $324 (20%); untick a tool → agent stops using it. (6 tests; live via real function-calling)
 
-## Phase 8 — ASR (speech in)  (R7)  ← NEXT
-- [ ] Adapters: browser Web Speech (client) + OpenAI + Gemini + ElevenLabs (server); transcript in chatbox; `asr_ms`; live waveform + mel-spectrogram.
-🧪 You test: pick a provider, speak → your words appear as text in the chatbox; see the waveform move.
+## Phase 8 — ASR (speech in)  (R7)  ✅ DONE
+- [x] browser Web Speech (client-side, no key) + OpenAI (gpt-4o-transcribe) / Gemini / ElevenLabs (server, via `/asr`); `audio.py` ffmpeg transcode → 16kHz WAV; transcript fills the chat input; `asr_ms`.
+- [x] Playground: **Voice input (ASR)** selector + **🎤 mic** button (MediaRecorder / Web Speech).
+🧪 You test: pick a provider, click 🎤, speak → your words fill the input. (5 tests; live-verified via a `say` clip → OpenAI returned it exactly)
+Note: live waveform/spectrogram deferred; the full mic→ASR→LLM→TTS loop is Phase 10.
 
-## Phase 9 — TTS (speech out)  (R10)
+## Phase 9 — TTS (speech out)  (R10)  ← NEXT
 - [ ] Adapters: OpenAI + Gemini + ElevenLabs with playback buffer; `tts_ms` + `buffer_ms`.
 🧪 You test: agent's answer is spoken aloud; change provider/voice; see the buffer's latency cost.
 

@@ -172,3 +172,10 @@ dialog::backdrop { background: rgba(4,6,10,.66); backdrop-filter: blur(2px); }
 .tool-item { display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: var(--muted); cursor: pointer; line-height: 1.4; }
 .tool-item b { color: var(--brand-2); font-family: ui-monospace, monospace; font-weight: 600; }
 .tool-item input { margin-top: 2px; }
+
+/* voice input (ASR) */
+.mic-btn { border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); border-radius: var(--radius-sm); padding: 0 13px; font-size: 16px; cursor: pointer; transition: .12s; }
+.mic-btn:hover { border-color: var(--brand); }
+.mic-btn.rec { background: rgba(248,113,113,.16); border-color: var(--bad); color: var(--bad); animation: micpulse 1s infinite; }
+@keyframes micpulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.asr-hint { font-size: 11.5px; color: var(--muted); padding: 4px 14px 0; }

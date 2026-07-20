@@ -14,12 +14,13 @@ import os
 
 import json
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import __version__, config
+from .asr import service as asr_service
 from .latency import Timer, empty_trace
 from .llm import orchestrator as chat_orch
 from .rag import index as rag_index
@@ -219,6 +220,17 @@ def inspect(req: ChatRequest, request: Request) -> dict:
         )
     except chat_orch.ChatError as e:
         raise HTTPException(status_code=e.status, detail=e.message)
+
+
+@app.post("/asr")
+async def asr(request: Request, file: UploadFile = File(...), provider: str = Form("openai")) -> dict:
+    """Transcribe uploaded audio (Phase 8). browser ASR is client-side; this serves openai/gemini/elevenlabs."""
+    api_key = config.resolve_key(provider, _headers_lower(request)) if provider in config.PROVIDERS else ""
+    raw = await file.read()
+    try:
+        return asr_service.transcribe(raw, provider, api_key)
+    except asr_service.ASRError as e:
+        raise HTTPException(status_code=e.status if e.status in (400, 401, 403, 429) else 502, detail=e.message)
 
 
 @app.get("/models")

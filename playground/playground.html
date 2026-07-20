@@ -12,7 +12,7 @@
   <header class="top">
     <div class="brand">
       <b>Nimbus <span class="grad">Playground</span></b>
-      <span class="phase-chip" id="phaseChip">Phase 7 · Tools</span>
+      <span class="phase-chip" id="phaseChip">Phase 8 · Voice input</span>
     </div>
     <div class="top-right">
       <span class="health" id="health"><span class="dot"></span><span id="healthText">connecting…</span></span>
@@ -45,6 +45,17 @@
           <button data-v="stream" class="active">Streaming</button>
         </div>
         <button class="btn ghost small" id="cmpModesBtn" style="margin-top:9px;">⚖ Compare batch vs stream</button>
+      </div>
+
+      <div class="field">
+        <label for="asrProvider">Voice input (ASR)</label>
+        <select id="asrProvider">
+          <option value="browser">Browser · Web Speech (no key)</option>
+          <option value="openai">OpenAI · gpt-4o-transcribe</option>
+          <option value="gemini">Gemini</option>
+          <option value="elevenlabs">ElevenLabs · scribe</option>
+        </select>
+        <p class="hint">Click 🎤 in the chat box, speak, click again to stop — the transcript fills the input.</p>
       </div>
 
       <div class="field">
@@ -119,7 +130,9 @@
           </div>
         </div>
       </div>
+      <div id="asrHint" class="asr-hint" hidden></div>
       <form class="composer" id="composer">
+        <button type="button" id="micBtn" class="mic-btn" title="Record voice input">🎤</button>
         <input class="text-in" id="input" type="text" autocomplete="off" placeholder="Ask about products, pricing, or policies…" />
         <button class="btn primary" type="submit">Send</button>
       </form>
@@ -140,6 +153,7 @@
       <p class="hint">Stored only in this browser (localStorage), sent per request. Never committed.</p>
       <div class="field"><label for="k_openai">OpenAI key</label><input class="text-in" id="k_openai" type="password" placeholder="sk-…" /></div>
       <div class="field"><label for="k_gemini">Gemini key <span style="color:var(--faint)">(optional)</span></label><input class="text-in" id="k_gemini" type="password" placeholder="AIza…" /></div>
+      <div class="field"><label for="k_elevenlabs">ElevenLabs key <span style="color:var(--faint)">(optional · ASR/TTS)</span></label><input class="text-in" id="k_elevenlabs" type="password" placeholder="…" /></div>
       <div class="field"><label for="apiBase">Backend URL</label><input class="text-in" id="apiBase" type="text" placeholder="http://localhost:8100" /></div>
       <div class="dlg-actions">
         <button value="cancel" class="btn ghost">Cancel</button>

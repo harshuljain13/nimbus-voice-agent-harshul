@@ -13,8 +13,8 @@ Detailed design doc (report) for every phase. Each follows the same structure:
 | 5 | [phase-05-llm-controls.md](phase-05-llm-controls.md) | R8 | ✅ Done |
 | 6 | [phase-06-streaming-vs-batch.md](phase-06-streaming-vs-batch.md) | R4 | ✅ Done |
 | 7 | [phase-07-tools.md](phase-07-tools.md) | R2 + R9 | ✅ Done |
-| 8 | phase-08-asr.md | R7 | ▶ Next |
-| 9 | phase-09-tts.md | R10 | ◻ Planned |
+| 8 | [phase-08-asr.md](phase-08-asr.md) | R7 | ✅ Done |
+| 9 | phase-09-tts.md | R10 | ▶ Next |
 | 10 | phase-10-voice-loop.md | R11 + R12 | ◻ Planned |
 | 11 | phase-11-latency-dashboard.md | R13 | ◻ Planned |
 | 12 | phase-12-widget-deploy.md | R14 | ◻ Planned |

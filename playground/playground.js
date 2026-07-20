@@ -17,11 +17,69 @@ const state = {
   busy: false,
 };
 function load(k) { try { return JSON.parse(localStorage.getItem(k) || "{}"); } catch { return {}; } }
-function authHeaders() {
-  const h = { "Content-Type": "application/json" };
+function keyHeaders() {
+  const h = {};
   if (state.keys.openai) h["X-OpenAI-Key"] = state.keys.openai;
   if (state.keys.gemini) h["X-Gemini-Key"] = state.keys.gemini;
+  if (state.keys.elevenlabs) h["X-ElevenLabs-Key"] = state.keys.elevenlabs;
   return h;
+}
+function authHeaders() {
+  return { "Content-Type": "application/json", ...keyHeaders() };
+}
+
+// ---- ASR (voice input, Phase 8) ----
+let asrRec = false, asrMedia = null, asrChunks = [], asrRecognizer = null, asrT0 = 0;
+function setMic(on) {
+  asrRec = on;
+  const b = $("micBtn");
+  b.classList.toggle("rec", on);
+  b.textContent = on ? "⏹" : "🎤";
+}
+function asrHint(msg) { const el = $("asrHint"); el.hidden = false; el.textContent = msg; }
+async function toggleMic() {
+  if (asrRec) { stopMic(); return; }
+  asrT0 = performance.now();
+  const p = $("asrProvider").value;
+  if (p === "browser") return browserASR();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    asrMedia = new MediaRecorder(stream);
+    asrChunks = [];
+    asrMedia.ondataavailable = (e) => e.data.size && asrChunks.push(e.data);
+    asrMedia.onstop = () => { stream.getTracks().forEach((t) => t.stop()); sendAudio(new Blob(asrChunks, { type: asrMedia.mimeType })); };
+    asrMedia.start();
+    setMic(true); asrHint("🎤 recording… click again to stop");
+  } catch { asrHint("🎤 mic blocked — allow microphone access"); }
+}
+function stopMic() {
+  setMic(false);
+  if (asrRecognizer) { asrRecognizer.stop(); asrRecognizer = null; return; }
+  if (asrMedia && asrMedia.state !== "inactive") asrMedia.stop();
+}
+async function sendAudio(blob) {
+  $("micBtn").textContent = "…"; asrHint("transcribing…");
+  const fd = new FormData();
+  fd.append("file", blob, "audio.webm");
+  fd.append("provider", $("asrProvider").value);
+  try {
+    const r = await fetch(state.base + "/asr", { method: "POST", headers: keyHeaders(), body: fd });
+    const d = await r.json();
+    if (!r.ok) { asrHint("ASR failed: " + (d.detail || r.status)); return; }
+    $("input").value = d.text; $("input").focus();
+    asrHint(`🎤 ${d.provider} · ${Math.round(d.asr_ms)} ms`);
+  } catch (e) { asrHint("ASR failed: " + e.message); }
+  finally { $("micBtn").textContent = "🎤"; }
+}
+function browserASR() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { asrHint("Web Speech not supported in this browser (try Chrome)"); return; }
+  asrRecognizer = new SR();
+  asrRecognizer.lang = "en-US"; asrRecognizer.interimResults = false; asrRecognizer.maxAlternatives = 1;
+  asrRecognizer.onresult = (e) => { $("input").value = e.results[0][0].transcript; $("input").focus(); asrHint(`🎤 browser · ${Math.round(performance.now() - asrT0)} ms`); };
+  asrRecognizer.onerror = (e) => asrHint("speech error: " + e.error);
+  asrRecognizer.onend = () => setMic(false);
+  asrRecognizer.start(); setMic(true); asrHint("🎤 listening… speak now");
 }
 
 // ---- chat ----
@@ -314,12 +372,13 @@ function initKeys() {
   $("keysBtn").addEventListener("click", () => {
     $("k_openai").value = state.keys.openai || "";
     $("k_gemini").value = state.keys.gemini || "";
+    $("k_elevenlabs").value = state.keys.elevenlabs || "";
     $("apiBase").value = state.base;
     dlg.showModal();
   });
   dlg.addEventListener("close", () => {
     if (dlg.returnValue !== "save") return;
-    state.keys = { openai: $("k_openai").value.trim(), gemini: $("k_gemini").value.trim() };
+    state.keys = { openai: $("k_openai").value.trim(), gemini: $("k_gemini").value.trim(), elevenlabs: $("k_elevenlabs").value.trim() };
     localStorage.setItem(LS_KEYS, JSON.stringify(state.keys));
     state.base = $("apiBase").value.trim() || DEFAULT_BASE;
     localStorage.setItem(LS_BASE, state.base);
@@ -351,6 +410,7 @@ function init() {
   $("ctxClose").addEventListener("click", () => $("ctxDlg").close());
   $("compareBtn").addEventListener("click", compare);
   $("cmpModesBtn").addEventListener("click", compareModes);
+  $("micBtn").addEventListener("click", toggleMic);
   $("cmpClose").addEventListener("click", () => $("cmpDlg").close());
   $("topk").addEventListener("input", persist);
   $("resetBtn").addEventListener("click", async () => {
