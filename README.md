@@ -9,8 +9,17 @@ Repo: **github.com/harshuljain13/nimbus-voice-agent-harshul** ·
 Target/reference: [`VizuaraAI/nimbus-voice-agent`](https://github.com/VizuaraAI/nimbus-voice-agent)
 (see [`.spec-dev/reference.md`](.spec-dev/reference.md)).
 
-**Live:** backend → https://nimbus-voice-agent-harshul.onrender.com (Render free tier — the first
-request after idle wakes it, ~50s). Frontend (site + playground + RAG viz) → Vercel (one app).
+## 🚀 Live
+
+- **Site + agent widget:** https://nimbus-harshul.vercel.app
+- **Playground:** https://nimbus-harshul.vercel.app/playground/playground.html
+- **RAG vector viz:** https://nimbus-harshul.vercel.app/playground/rag.html
+- **Backend API:** https://nimbus-voice-agent-harshul.onrender.com (Render free tier — the first
+  request after idle wakes it, ~50s)
+
+Public deploy uses `REQUIRE_USER_KEYS=true`, so enter your own OpenAI key in the playground's
+**API keys** dialog / the widget's key prompt (stored only in your browser; the server never uses
+its own key).
 
 > Nimbus is a made-up company; all names, prices, and policies are invented for teaching.
 
