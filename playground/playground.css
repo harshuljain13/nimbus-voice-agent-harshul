@@ -164,3 +164,11 @@ dialog::backdrop { background: rgba(4,6,10,.66); backdrop-filter: blur(2px); }
 .cmp th, .cmp td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .cmp th:first-child, .cmp td:first-child { text-align: left; color: var(--muted); }
 .cmp th { color: var(--faint); font-weight: 600; }
+
+/* tools panel */
+.tools-lbl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
+.tools-actions { display: flex; gap: 8px; margin: 9px 0; }
+.tool-list { display: flex; flex-direction: column; gap: 7px; max-height: 190px; overflow-y: auto; }
+.tool-item { display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; color: var(--muted); cursor: pointer; line-height: 1.4; }
+.tool-item b { color: var(--brand-2); font-family: ui-monospace, monospace; font-weight: 600; }
+.tool-item input { margin-top: 2px; }

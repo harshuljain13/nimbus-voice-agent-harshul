@@ -1,26 +1,27 @@
-"""Chat orchestration — converging on the reference API contract (see .spec-dev/reference.md §3).
+"""Chat orchestration — reference API contract (see .spec-dev/reference.md §3).
 
-Phases 2-5: batch, multi-turn. Providers OpenAI + Gemini; knowledge RAGless / RAG / none;
-conversation history (last-N verbatim + rolling summary). Returns reference-shaped
-{text, latency, meta}. Streaming and tools are guarded off until their phases.
+Phases 2-7: batch + streaming, multi-turn, OpenAI + Gemini, knowledge RAGless/RAG/none,
+conversation history (verbatim + rolling summary), and a tool-call loop (batch mode). Returns
+reference-shaped {text, latency, meta}; chat_stream yields SSE-style events.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, AsyncIterator
 
 from .. import config
 from ..latency import Timer, empty_trace
 from ..rag import service as rag_service
 from ..scraping import paths
+from ..tools import registry as tool_registry
 from . import history, prompts, tokens
 from .providers import gemini as gemini_provider
 from .providers import openai as openai_provider
 from .providers.base import ProviderError
 
 _PROVIDERS = {"openai": openai_provider, "gemini": gemini_provider}
-_SUMMARY_MODEL = "gpt-4o-mini"  # cheap OpenAI model used to summarize aged-out history
+_SUMMARY_MODEL = "gpt-4o-mini"
 
 HISTORY = history.HistoryStore()
 
@@ -36,7 +37,6 @@ _context_cache: dict[str, Any] = {"mtime": None, "text": ""}
 
 
 def load_context() -> str:
-    """Return the RAGless grounding payload (``context.md``), cached by mtime."""
     path = paths.CONTEXT_PATH
     if not os.path.exists(path):
         raise ChatError(409, "context.md not built — run Scrape → Build context.md first.")
@@ -54,17 +54,8 @@ def _resolve_model(model_key: str) -> dict[str, str]:
     return config.LLM_MODELS[model_key]
 
 
-def assemble(
-    message: str,
-    *,
-    response_length: str,
-    use_context: bool,
-    use_rag: bool,
-    system_prompt: str | None,
-    top_k: int = 4,
-    rerank: bool = False,
-    api_key: str | None = None,
-) -> tuple[list[dict[str, str]], dict[str, Any]]:
+def assemble(message, *, response_length, use_context, use_rag, system_prompt, top_k=4,
+             rerank=False, tools_available=False, api_key=None) -> tuple[list[dict[str, str]], dict[str, Any]]:
     """Build the [system, user] pair + grounding metadata (RAG / RAGless / none)."""
     rag_info: dict[str, Any] | None = None
     if use_rag:
@@ -79,21 +70,19 @@ def assemble(
                     "latency": res["latency"],
                     "chunks": [{"doc": r["doc"], "heading": r["heading"], "score": r["score"]} for r in res["results"]]}
     elif use_context:
-        knowledge = "ragless"
-        context = load_context()
+        knowledge, context = "ragless", load_context()
     else:
-        knowledge = "none"
-        context = ""
+        knowledge, context = "none", ""
 
     grounded = knowledge in ("rag", "ragless")
-    messages = prompts.build_messages(message, context, response_length, system_prompt, grounded=grounded)
+    messages = prompts.build_messages(message, context, response_length, system_prompt,
+                                      grounded=grounded, tools_available=tools_available)
     info = {"knowledge": knowledge, "context_chars": len(context),
             "context_tokens": tokens.count_tokens(context)["tokens"] if context else 0, "rag": rag_info}
     return messages, info
 
 
-def _build_final(base: list[dict[str, str]], summary: str, recent: list[dict[str, str]]) -> list[dict[str, str]]:
-    """system(grounding) + optional summary + recent verbatim turns + current user turn."""
+def _build_final(base, summary, recent):
     final = [base[0]]
     if summary:
         final.append({"role": "system", "content": "Summary of earlier conversation:\n" + summary})
@@ -102,134 +91,172 @@ def _build_final(base: list[dict[str, str]], summary: str, recent: list[dict[str
     return final
 
 
-async def _summarize_if_needed(session_id: str, sess: dict[str, Any], older: list[dict[str, str]],
-                               openai_key: str) -> dict[str, Any]:
+async def _summarize_if_needed(session_id, sess, older, openai_key):
     if not history.needs_summary(sess, older):
         return sess
     try:
-        out = await openai_provider.complete(
-            messages=history.summary_prompt(sess["summary"], older),
-            model=_SUMMARY_MODEL, api_key=openai_key, max_tokens=220, temperature=0.2)
+        out = await openai_provider.complete(messages=history.summary_prompt(sess["summary"], older),
+                                             model=_SUMMARY_MODEL, api_key=openai_key, max_tokens=220, temperature=0.2)
         sess = {**sess, "summary": out["text"], "summarized_count": len(older)}
         HISTORY.set(session_id, sess)
     except ProviderError:
-        pass  # summarization is best-effort; keep the previous summary
+        pass
     return sess
 
 
-async def chat(
-    *,
-    message: str,
-    model_key: str = "openai-lite",
-    response_length: str = "medium",
-    use_context: bool = True,
-    use_rag: bool = False,
-    top_k: int = 4,
-    rerank: bool = False,
-    verbatim_turns: int = 6,
-    system_prompt: str | None = None,
-    temperature: float = 0.3,
-    mode: str = "batch",
-    session_id: str | None = None,
-    headers: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    """Run one batch chat turn (with history) → reference-shaped ``{text, latency, meta}``."""
+async def _prepare(*, message, model_key, response_length, use_context, use_rag, top_k, rerank,
+                   verbatim_turns, system_prompt, session_id, headers,
+                   tools_enabled=False, enabled_tools=None) -> dict[str, Any]:
+    """Shared setup for batch + stream: validate, assemble grounding, thread history."""
     message = (message or "").strip()
     if not message:
         raise ChatError(400, "Empty message.")
-    if mode == "stream":
-        raise ChatError(400, "Streaming arrives in Phase 6 — use batch for now.")
     spec = _resolve_model(model_key)
     provider = spec["provider"]
-    openai_key = config.resolve_key("openai", headers)                       # RAG embed / rerank / summary
+    openai_key = config.resolve_key("openai", headers)                    # RAG embed / rerank / summary / tools
     llm_key = openai_key if provider == "openai" else config.resolve_key(provider, headers)
 
+    # tools_enabled with no explicit subset → all tools; a non-empty list → just that subset.
+    specs = tool_registry.enabled_specs(enabled_tools or None) if tools_enabled else []
+    tools_available = tools_enabled and provider == "openai" and bool(specs)
+
     trace = empty_trace()
-    total = Timer()
-    messages, info = assemble(message, response_length=response_length, use_context=use_context,
-                              use_rag=use_rag, system_prompt=system_prompt, top_k=top_k,
-                              rerank=rerank, api_key=openai_key)
+    base, info = assemble(message, response_length=response_length, use_context=use_context,
+                          use_rag=use_rag, system_prompt=system_prompt, top_k=top_k, rerank=rerank,
+                          tools_available=tools_available, api_key=openai_key)
     if info["rag"]:
         trace["rag_ms"] = info["rag"]["rag_ms"]
 
-    # conversation history: keep the last N verbatim, summarize the rest
-    recent: list[dict[str, str]] = []
-    summary = ""
-    summarized = 0
+    recent, summary, summarized = [], "", 0
     if session_id:
         sess = HISTORY.get(session_id)
         older, recent = history.split_for_context(sess["turns"], verbatim_turns)
         sess = await _summarize_if_needed(session_id, sess, older, openai_key)
         summary, summarized = sess["summary"], sess["summarized_count"]
-    final = _build_final(messages, summary, recent)
 
+    return {"message": message, "model_key": model_key, "spec": spec, "provider": provider,
+            "openai_key": openai_key, "llm_key": llm_key, "trace": trace, "info": info,
+            "final": _build_final(base, summary, recent), "recent": recent, "summary": summary,
+            "summarized": summarized, "response_length": response_length,
+            "specs": specs, "tools_available": tools_available}
+
+
+def _build_meta(ctx, *, mode, model, usage, tool_calls):
+    info = ctx["info"]
+    rag_meta = None
+    if info["rag"]:
+        r = info["rag"]
+        rag_meta = {"k": r["k"], "reranked": r["reranked"], "latency": r["latency"], "chunks": r["chunks"]}
+    return {"model": model, "model_key": ctx["model_key"], "provider": ctx["provider"], "mode": mode,
+            "knowledge": info["knowledge"], "context_chars": info["context_chars"],
+            "context_tokens": info["context_tokens"], "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"), "system_chars": len(ctx["final"][0]["content"]),
+            "verbatim_messages": len(ctx["recent"]), "summarized_messages": ctx["summarized"],
+            "summary_used": bool(ctx["summary"]), "tool_calls": tool_calls, "rag": rag_meta}
+
+
+async def chat(*, message, model_key="openai-lite", response_length="medium", use_context=True,
+               use_rag=False, top_k=4, rerank=False, verbatim_turns=6, tools_enabled=False,
+               enabled_tools=None, system_prompt=None, temperature=0.3, mode="batch",
+               session_id=None, headers=None) -> dict[str, Any]:
+    """One batch chat turn (history + optional tool-call loop) → {text, latency, meta}."""
+    if mode == "stream":
+        raise ChatError(400, "Use /chat/stream for streaming.")
+    total = Timer()
+    ctx = await _prepare(message=message, model_key=model_key, response_length=response_length,
+                         use_context=use_context, use_rag=use_rag, top_k=top_k, rerank=rerank,
+                         verbatim_turns=verbatim_turns, system_prompt=system_prompt,
+                         session_id=session_id, headers=headers,
+                         tools_enabled=tools_enabled, enabled_tools=enabled_tools)
+    trace, spec, provider = ctx["trace"], ctx["spec"], ctx["provider"]
+    max_tokens = prompts.max_tokens_for(response_length)
+
+    specs = ctx["specs"]
+    use_tools = ctx["tools_available"]
+    tool_calls: list[dict] = []
     llm_timer = Timer()
     try:
-        out = await _PROVIDERS[provider].complete(
-            messages=final, model=spec["model"], api_key=llm_key,
-            max_tokens=prompts.max_tokens_for(response_length), temperature=temperature)
+        if use_tools:
+            out = await openai_provider.complete_with_tools(
+                messages=ctx["final"], model=spec["model"], api_key=ctx["llm_key"],
+                tool_schema=tool_registry.openai_schema(specs),
+                dispatch=tool_registry.make_dispatch(session_id or "anon", enabled_tools or None),
+                max_tokens=max_tokens, temperature=temperature)
+            tool_calls = out["tool_calls"]
+            trace["tool_ms"] = out["tool_ms"]
+        else:
+            out = await _PROVIDERS[provider].complete(
+                messages=ctx["final"], model=spec["model"], api_key=ctx["llm_key"],
+                max_tokens=max_tokens, temperature=temperature)
     except ProviderError as e:
         raise ChatError(e.status if e.status in (400, 401, 403, 429) else 502, e.message) from e
     trace["llm_total_ms"] = llm_timer.ms()
     trace["total_ms"] = total.ms()
 
-    if session_id:  # persist this turn for the next one
-        HISTORY.append(session_id, "user", message)
+    if session_id:
+        HISTORY.append(session_id, "user", ctx["message"])
         HISTORY.append(session_id, "assistant", out["text"])
 
-    usage = out.get("usage", {})
-    rag_meta = None
-    if info["rag"]:
-        rag_meta = {"k": info["rag"]["k"], "reranked": info["rag"]["reranked"],
-                    "latency": info["rag"]["latency"], "chunks": info["rag"]["chunks"]}
-    meta = {
-        "model": out.get("model", spec["model"]),
-        "model_key": model_key,
-        "provider": provider,
-        "mode": "batch",
-        "knowledge": info["knowledge"],
-        "context_chars": info["context_chars"],
-        "context_tokens": info["context_tokens"],
-        "prompt_tokens": usage.get("prompt_tokens"),
-        "completion_tokens": usage.get("completion_tokens"),
-        "system_chars": len(final[0]["content"]),
-        "verbatim_messages": len(recent),
-        "summarized_messages": summarized,
-        "summary_used": bool(summary),
-        "tool_calls": [],
-        "rag": rag_meta,
-    }
+    meta = _build_meta(ctx, mode="batch", model=out.get("model", spec["model"]),
+                       usage=out.get("usage", {}), tool_calls=tool_calls)
     return {"text": out["text"], "latency": trace, "meta": meta}
 
 
-def inspect(
-    *,
-    message: str,
-    response_length: str = "medium",
-    use_context: bool = True,
-    use_rag: bool = False,
-    top_k: int = 4,
-    rerank: bool = False,
-    verbatim_turns: int = 6,
-    system_prompt: str | None = None,
-    model_key: str = "openai-lite",
-    session_id: str | None = None,
-    api_key: str | None = None,
-    **_ignore: Any,
-) -> dict[str, Any]:
-    """Context inspector — the exact messages that would be sent + per-message token counts.
-    Shows the stored summary + recent turns (does not trigger a new summarization)."""
+async def chat_stream(*, message, model_key="openai-lite", response_length="medium", use_context=True,
+                      use_rag=False, top_k=4, rerank=False, verbatim_turns=6, system_prompt=None,
+                      temperature=0.3, session_id=None, headers=None) -> AsyncIterator[dict[str, Any]]:
+    """Stream a chat turn (text-only; tools run in batch mode). Yields delta/done/error events."""
+    total = Timer()
+    try:
+        ctx = await _prepare(message=message, model_key=model_key, response_length=response_length,
+                             use_context=use_context, use_rag=use_rag, top_k=top_k, rerank=rerank,
+                             verbatim_turns=verbatim_turns, system_prompt=system_prompt,
+                             session_id=session_id, headers=headers)
+    except ChatError as e:
+        yield {"type": "error", "error": e.message}
+        return
+    trace, spec, provider = ctx["trace"], ctx["spec"], ctx["provider"]
+    acc = ""
+    llm_timer = Timer()
+    try:
+        async for delta in _PROVIDERS[provider].stream(
+                messages=ctx["final"], model=spec["model"], api_key=ctx["llm_key"],
+                max_tokens=prompts.max_tokens_for(response_length), temperature=temperature):
+            if not acc:
+                trace["llm_ttft_ms"] = llm_timer.ms()   # time to first token
+            acc += delta
+            yield {"type": "delta", "text": delta}
+    except ProviderError as e:
+        yield {"type": "error", "error": e.message}
+        return
+    trace["llm_total_ms"] = llm_timer.ms()
+    trace["total_ms"] = total.ms()
+
+    if session_id:
+        HISTORY.append(session_id, "user", ctx["message"])
+        HISTORY.append(session_id, "assistant", acc)
+
+    # streaming APIs don't return usage by default — count locally so the metrics match batch mode
+    usage = {"prompt_tokens": sum(tokens.count_tokens(m["content"], spec["model"])["tokens"] for m in ctx["final"]),
+             "completion_tokens": tokens.count_tokens(acc, spec["model"])["tokens"]}
+    meta = _build_meta(ctx, mode="stream", model=spec["model"], usage=usage, tool_calls=[])
+    yield {"type": "done", "text": acc, "latency": trace, "meta": meta}
+
+
+def inspect(*, message, response_length="medium", use_context=True, use_rag=False, top_k=4,
+            rerank=False, verbatim_turns=6, system_prompt=None, model_key="openai-lite",
+            session_id=None, api_key=None, **_ignore) -> dict[str, Any]:
+    """Context inspector — exact messages + per-message token counts (uses stored history)."""
     spec = _resolve_model(model_key)
-    messages, info = assemble(message or "(preview)", response_length=response_length,
-                              use_context=use_context, use_rag=use_rag, system_prompt=system_prompt,
-                              top_k=top_k, rerank=rerank, api_key=api_key)
+    base, info = assemble(message or "(preview)", response_length=response_length,
+                          use_context=use_context, use_rag=use_rag, system_prompt=system_prompt,
+                          top_k=top_k, rerank=rerank, api_key=api_key)
     summary, recent = "", []
     if session_id:
         sess = HISTORY.get(session_id)
         _, recent = history.split_for_context(sess["turns"], verbatim_turns)
         summary = sess["summary"]
-    final = _build_final(messages, summary, recent)
-
+    final = _build_final(base, summary, recent)
     rows, total_tokens, total_chars = [], 0, 0
     for m in final:
         t = tokens.count_tokens(m["content"], spec["model"])["tokens"]

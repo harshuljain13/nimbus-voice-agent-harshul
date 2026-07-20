@@ -12,6 +12,7 @@ const state = {
   keys: load(LS_KEYS),
   length: "medium",
   knowledge: "ragless",
+  mode: "batch",
   session: "pg-" + Math.random().toString(36).slice(2),
   busy: false,
 };
@@ -19,6 +20,7 @@ function load(k) { try { return JSON.parse(localStorage.getItem(k) || "{}"); } c
 function authHeaders() {
   const h = { "Content-Type": "application/json" };
   if (state.keys.openai) h["X-OpenAI-Key"] = state.keys.openai;
+  if (state.keys.gemini) h["X-Gemini-Key"] = state.keys.gemini;
   return h;
 }
 
@@ -46,13 +48,18 @@ function payload(message) {
     use_context: state.knowledge === "ragless", use_rag: state.knowledge === "rag",
     top_k: Number($("topk").value), rerank: $("rerank").checked,
     verbatim_turns: Number($("verbatim").value),
+    tools_enabled: $("toolsOn").checked, enabled_tools: enabledToolNames(),
     temperature: Number($("temp").value) / 10,
     system_prompt: $("sysPrompt").value.trim() || null,
   };
 }
+function enabledToolNames() {
+  return [...document.querySelectorAll("#toolList input:checked")].map((c) => c.value);
+}
 
 async function compare() {
   const q = $("input").value.trim() || "What is the refund policy?";
+  $("cmpTitle").textContent = "RAG vs RAGless";
   $("cmpQ").textContent = `“${q}”`;
   $("cmpBody").innerHTML = "<p class='stat-empty'>running both…</p>";
   $("cmpDlg").showModal();
@@ -82,29 +89,88 @@ async function compare() {
       `<p class="hint" style="margin-top:12px">RAG sends a fraction of the tokens (cheaper, scales past the context window). Total latency is similar here because RAG's query-embed offsets the smaller-prompt LLM win — and OpenAI caches the big RAGless prompt.</p>`;
   } catch (e) { $("cmpBody").innerHTML = `<p style="color:var(--bad)">${e.message}</p>`; }
 }
+
+async function compareModes() {
+  const q = $("input").value.trim() || "What is the refund policy?";
+  $("cmpTitle").textContent = "Batch vs Streaming";
+  $("cmpQ").textContent = `“${q}”`;
+  $("cmpBody").innerHTML = "<p class='stat-empty'>running both…</p>";
+  $("cmpDlg").showModal();
+  const body = { ...payload(q), session_id: null, tools_enabled: false };  // isolate; streaming is text-only
+  try {
+    const bd = await (await fetch(state.base + "/chat", { method: "POST", headers: authHeaders(), body: JSON.stringify(body) })).json();
+    const stext = await (await fetch(state.base + "/chat/stream", { method: "POST", headers: authHeaders(), body: JSON.stringify(body) })).text();
+    const done = stext.split("\n\n").map((p) => p.split("\n").find((l) => l.startsWith("data: "))).filter(Boolean)
+      .map((l) => { try { return JSON.parse(l.slice(6)); } catch { return null; } }).filter(Boolean).find((e) => e.type === "done");
+    const L = (o, k) => (o && o.latency && o.latency[k]) ? Math.round(o.latency[k]) + " ms" : "—";
+    const row = (label, a, b) => `<tr><td>${label}</td><td>${a}</td><td>${b}</td></tr>`;
+    $("cmpBody").innerHTML =
+      `<table class="cmp"><thead><tr><th></th><th>Batch</th><th>Stream</th></tr></thead><tbody>` +
+      row("Time to first token", "— (waits for all)", L(done, "llm_ttft_ms")) +
+      row("LLM ms", L(bd, "llm_total_ms"), L(done, "llm_total_ms")) +
+      row("Total ms", L(bd, "total_ms"), L(done, "total_ms")) +
+      `</tbody></table>` +
+      `<p class="hint" style="margin-top:12px">Total time is similar, but streaming shows the first token after ~TTFT ms — so it <b>feels</b> far faster. Batch makes you wait for the whole answer.</p>`;
+  } catch (e) { $("cmpBody").innerHTML = `<p style="color:var(--bad)">${e.message}</p>`; }
+}
+function renderSources(pending, data) {
+  if (data.meta && data.meta.rag && data.meta.rag.chunks && data.meta.rag.chunks.length) {
+    const srcs = [...new Set(data.meta.rag.chunks.map((c) => c.doc))];
+    const f = document.createElement("div");
+    f.className = "msg-src";
+    f.textContent = "Sources: " + srcs.join(" · ");
+    pending.appendChild(f);
+  }
+}
+
+async function batchTurn(message, pending) {
+  const r = await fetch(state.base + "/chat", { method: "POST", headers: authHeaders(), body: JSON.stringify(payload(message)) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { pending.className = "msg err"; pending.textContent = data.detail || `Request failed (${r.status})`; return; }
+  pending.className = "msg bot";
+  pending.textContent = data.text;
+  renderSources(pending, data);
+  renderTurn(data);
+}
+
+async function streamTurn(message, pending) {
+  pending.className = "msg bot";
+  pending.textContent = "";
+  const r = await fetch(state.base + "/chat/stream", { method: "POST", headers: authHeaders(), body: JSON.stringify(payload(message)) });
+  if (!r.ok || !r.body) { pending.className = "msg err"; pending.textContent = "Stream failed (" + r.status + ")"; return; }
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", acc = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const parts = buf.split("\n\n");
+    buf = parts.pop();
+    for (const part of parts) {
+      const line = part.split("\n").find((l) => l.startsWith("data: "));
+      if (!line) continue;
+      let ev; try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+      if (ev.type === "delta") { acc += ev.text; pending.textContent = acc; $("messages").scrollTop = $("messages").scrollHeight; }
+      else if (ev.type === "error") { pending.className = "msg err"; pending.textContent = ev.error; }
+      else if (ev.type === "done") { renderSources(pending, ev); renderTurn(ev); }
+    }
+  }
+}
+
 async function send(message) {
   addMsg("user", message);
   const pending = addMsg("bot pending", "…");
   setBusy(true);
   try {
-    const r = await fetch(state.base + "/chat", { method: "POST", headers: authHeaders(), body: JSON.stringify(payload(message)) });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) { pending.className = "msg err"; pending.textContent = data.detail || `Request failed (${r.status})`; return; }
-    pending.className = "msg bot";
-    pending.textContent = data.text;
-    if (data.meta && data.meta.rag && data.meta.rag.chunks && data.meta.rag.chunks.length) {
-      const srcs = [...new Set(data.meta.rag.chunks.map((c) => c.doc))];
-      const f = document.createElement("div");
-      f.className = "msg-src";
-      f.textContent = "Sources: " + srcs.join(" · ");
-      pending.appendChild(f);
-    }
-    renderTurn(data);
+    if (state.mode === "stream") await streamTurn(message, pending);
+    else await batchTurn(message, pending);
   } catch (e) {
     pending.className = "msg err";
     pending.textContent = `Can't reach the backend at ${state.base}. Is it running? (${e.message})`;
   } finally {
     setBusy(false);
+    refreshCart();
   }
 }
 
@@ -124,17 +190,44 @@ function renderTurn(data) {
       `<div class="chunk"><span class="chunk-doc">${c.doc}</span><span class="chunk-score">${c.score.toFixed(3)}</span><div class="chunk-head">${c.heading}</div></div>`).join("");
     chunks = `<div class="chunks-head">Retrieved ${meta.rag.chunks.length} chunks (top-${meta.rag.k})</div>${rows}`;
   }
+  let toolsHtml = "";
+  if (meta.tool_calls && meta.tool_calls.length) {
+    const rows = meta.tool_calls.map((t) =>
+      `<div class="chunk"><span class="chunk-doc">${t.name}</span><span class="chunk-score">${Math.round(t.ms)}ms</span><div class="chunk-head">${esc(JSON.stringify(t.args || {}))}</div></div>`).join("");
+    toolsHtml = `<div class="chunks-head">Tools called (${meta.tool_calls.length})</div>${rows}`;
+  }
   $("turn").innerHTML =
     `<div class="total"><span class="n grad">${Math.round(lat.total_ms)}</span><small>ms total</small></div>` +
     stages +
     `<div style="margin-top:14px"></div>` +
     kv("Knowledge", meta.knowledge) +
+    kv("Mode", meta.mode) +
+    kv("TTFT", meta.mode === "stream" ? Math.round(lat.llm_ttft_ms || 0) + " ms" : "— (batch)") +
+    kv("LLM ms", Math.round(lat.llm_total_ms || 0)) +
     kv("Context tokens", meta.knowledge === "none" ? "0" : n(meta.context_tokens)) +
     kv("Prompt tokens", n(meta.prompt_tokens)) +
     kv("Output tokens", n(meta.completion_tokens)) +
     kv("Model", meta.model) +
     kv("Memory", (meta.verbatim_messages || 0) + " verbatim" + (meta.summary_used ? " + summary" : "")) +
-    chunks;
+    toolsHtml + chunks;
+}
+function esc(s) { return String(s).replace(/[<>&]/g, (m) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[m])); }
+
+async function loadTools() {
+  try {
+    const d = await (await fetch(state.base + "/tools")).json();
+    $("toolList").innerHTML = d.tools.map((t) =>
+      `<label class="tool-item"><input type="checkbox" value="${t.name}" checked /><span><b>${t.name}</b> — ${t.description}</span></label>`).join("");
+  } catch { /* ignore */ }
+}
+async function refreshCart() {
+  try {
+    const d = await (await fetch(state.base + "/cart?session_id=" + encodeURIComponent(state.session))).json();
+    if (!d.items.length) { $("cart") && ($("cart").innerHTML = ""); return; }
+    const el = $("cart"); if (!el) return;
+    el.innerHTML = `<div class="chunks-head">Cart · $${d.monthly_total}/mo</div>` +
+      d.items.map((i) => `<div class="chunk"><span class="chunk-doc">${i.product_name}</span><span class="chunk-score">$${i.price_monthly * i.seats}/mo</span><div class="chunk-head">${i.tier} × ${i.seats}</div></div>`).join("");
+  } catch { /* ignore */ }
 }
 
 // ---- backend status ----
@@ -215,12 +308,13 @@ function initKeys() {
   const dlg = $("keysDlg");
   $("keysBtn").addEventListener("click", () => {
     $("k_openai").value = state.keys.openai || "";
+    $("k_gemini").value = state.keys.gemini || "";
     $("apiBase").value = state.base;
     dlg.showModal();
   });
   dlg.addEventListener("close", () => {
     if (dlg.returnValue !== "save") return;
-    state.keys = { openai: $("k_openai").value.trim() };
+    state.keys = { openai: $("k_openai").value.trim(), gemini: $("k_gemini").value.trim() };
     localStorage.setItem(LS_KEYS, JSON.stringify(state.keys));
     state.base = $("apiBase").value.trim() || DEFAULT_BASE;
     localStorage.setItem(LS_BASE, state.base);
@@ -242,11 +336,16 @@ function init() {
   $("topk").addEventListener("input", (e) => { $("topkVal").textContent = e.target.value; persist(); });
   $("temp").addEventListener("input", (e) => { $("tempVal").textContent = (e.target.value / 10).toFixed(1); persist(); });
   $("verbatim").addEventListener("input", (e) => { $("verbatimVal").textContent = e.target.value; persist(); });
+  seg("mode", (v) => { state.mode = v; });
+  $("toolsOn").addEventListener("change", (e) => { $("toolsBox").hidden = !e.target.checked; persist(); });
+  $("toolAll").addEventListener("click", () => document.querySelectorAll("#toolList input").forEach((c) => (c.checked = true)));
+  $("toolNone").addEventListener("click", () => document.querySelectorAll("#toolList input").forEach((c) => (c.checked = false)));
   $("sysPrompt").addEventListener("input", persist);
   $("model").addEventListener("change", persist);
   $("inspectBtn").addEventListener("click", inspect);
   $("ctxClose").addEventListener("click", () => $("ctxDlg").close());
   $("compareBtn").addEventListener("click", compare);
+  $("cmpModesBtn").addEventListener("click", compareModes);
   $("cmpClose").addEventListener("click", () => $("cmpDlg").close());
   $("topk").addEventListener("input", persist);
   $("resetBtn").addEventListener("click", async () => {
@@ -266,6 +365,6 @@ function init() {
     send(c.textContent);
   }));
   initKeys();
-  refreshHealth(); loadModels(); persist();
+  refreshHealth(); loadModels(); loadTools(); persist();
 }
 init();

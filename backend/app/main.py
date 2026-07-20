@@ -12,8 +12,11 @@ from __future__ import annotations
 import glob
 import os
 
+import json
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import __version__, config
@@ -24,6 +27,8 @@ from .rag import service as rag_service
 from .scraping import build_context as bc_mod
 from .scraping import paths as corpus_paths
 from .scraping import scrape as scrape_mod
+from .tools import cart_store
+from .tools import registry as tool_registry
 
 app = FastAPI(title="Nimbus Voice Agent Backend", version=__version__)
 
@@ -160,7 +165,7 @@ class ChatRequest(BaseModel):
     verbatim_turns: int = 6                # (history) Phase 5
     temperature: float = 0.3
     system_prompt: str | None = None
-    tools_enabled: bool = True             # (tools) Phase 7
+    tools_enabled: bool = False            # tools opt-in (Phase 7); the playground checkbox sets it
     enabled_tools: list[str] = Field(default_factory=list)
 
 
@@ -176,11 +181,28 @@ async def chat(req: ChatRequest, request: Request) -> dict:
         return await chat_orch.chat(
             message=req.message, model_key=req.model_key, response_length=req.response_length,
             use_context=req.use_context, use_rag=req.use_rag, top_k=req.top_k, rerank=req.rerank,
-            verbatim_turns=req.verbatim_turns, system_prompt=req.system_prompt,
-            temperature=req.temperature, mode=req.mode, session_id=req.session_id, headers=headers,
+            verbatim_turns=req.verbatim_turns, tools_enabled=req.tools_enabled,
+            enabled_tools=req.enabled_tools, system_prompt=req.system_prompt,
+            temperature=req.temperature, mode="batch", session_id=req.session_id, headers=headers,
         )
     except chat_orch.ChatError as e:
         raise HTTPException(status_code=e.status, detail=e.message)
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
+    """Server-sent-events stream of the answer (Phase 6). Tools run in batch mode only."""
+    headers = _headers_lower(request)
+
+    async def gen():
+        async for ev in chat_orch.chat_stream(
+                message=req.message, model_key=req.model_key, response_length=req.response_length,
+                use_context=req.use_context, use_rag=req.use_rag, top_k=req.top_k, rerank=req.rerank,
+                verbatim_turns=req.verbatim_turns, system_prompt=req.system_prompt,
+                temperature=req.temperature, session_id=req.session_id, headers=headers):
+            yield f"data: {json.dumps(ev)}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @app.post("/inspect")
@@ -209,15 +231,19 @@ def models(request: Request) -> dict:
     ]}
 
 
-# Stubs so the reference playground loads cleanly; each lights up in its phase.
 @app.get("/tools")
 def tools() -> dict:
-    return {"tools": []}                                # the 11-tool suite → Phase 7
+    """The 11 cart/pricing/product tools (name + description) for the on/off panel (Phase 7)."""
+    return {"tools": tool_registry.list_tools()}
 
 
 @app.get("/cart")
 def cart(session_id: str = Query("")) -> dict:
-    return {"items": [], "monthly_total": 0}            # cart → Phase 7
+    """The session's cart (Phase 7) — item shape mirrors the site's nimbus_cart."""
+    items = cart_store.get(session_id)
+    return {"items": [{"product_name": i["product_name"], "tier": i["tier"], "seats": i["seats"],
+                       "price_monthly": i["price_monthly"]} for i in items],
+            "monthly_total": sum(i["price_monthly"] * i["seats"] for i in items)}
 
 
 @app.post("/session/reset")

@@ -64,16 +64,16 @@ Make the brain configurable + conversational.
 🧪 You test: (None mode) "My name is Harshul, I love Nimbus CRM" → "what's my name + product?" recalls both; lower the memory slider to see a summary form; Gemini appears in the picker.
 Note: interrupt `[cancelled by user]` moves to Phase 10 (voice loop, where barge-in lives).
 
-## Phase 6 — Streaming vs batch  (R4)  ← NEXT
-- [ ] Streaming path (`stream()`, `llm_ttft_ms`) + batch (`llm_total_ms`); mode toggle + side-by-side comparison.
-🧪 You test: flip streaming/batch → see time-to-first-token vs total latency compared.
+## Phase 6 — Streaming vs batch  (R4)  ✅ DONE
+- [x] Streaming path (`stream()` on both providers, `llm_ttft_ms`) + batch; `POST /chat/stream` (SSE); Mode toggle; TTFT in "This turn".
+🧪 You test: Mode → Streaming → the answer types out live; TTFT vs total shown. (2 tests; live-verified)
 
-## Phase 7 — Tools + on/off selection  (R2 + R9)
-- [ ] 11 tools (add_to_cart, cart_total, checkout, annual_price, annual_savings_pct, sort_by_price, top_k_expensive, remove_item, checkout_item, clear_cart, product_lookup) each timed; cart bridged to the site's `nimbus_cart`.
-- [ ] Master on/off + per-tool allowlist (all/none/subset) in the playground.
-🧪 You test: "add CRM Professional to my cart", "what's my annual total?", "clear cart" → cart updates (and matches the site cart); turn a tool off → the agent stops using it.
+## Phase 7 — Tools + on/off selection  (R2 + R9)  ✅ DONE
+- [x] **11 tools** (add_to_cart, cart_total, checkout, annual_pricing, savings_annual_vs_monthly, sort_products, top_k_expensive, remove_item, checkout_item, clear_cart, product_info), each timed; function-call loop; session cart (nimbus_cart shape).
+- [x] Master on/off + per-tool All/None/subset (R2 — enforced at dispatch **and** never advertised); tool trace + live cart in the UI.
+🧪 You test: tools on → "add 3 seats of CRM Professional + total" → $135, cart fills; "annual savings?" → $324 (20%); untick a tool → agent stops using it. (6 tests; live via real function-calling)
 
-## Phase 8 — ASR (speech in)  (R7)
+## Phase 8 — ASR (speech in)  (R7)  ← NEXT
 - [ ] Adapters: browser Web Speech (client) + OpenAI + Gemini + ElevenLabs (server); transcript in chatbox; `asr_ms`; live waveform + mel-spectrogram.
 🧪 You test: pick a provider, speak → your words appear as text in the chatbox; see the waveform move.
 

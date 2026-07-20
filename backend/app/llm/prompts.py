@@ -34,14 +34,20 @@ _BASE_INSTRUCTIONS = (
     "- Speak naturally as Nimbus's own assistant. Do not mention that this is a demo, that "
     "Nimbus is fictional, or that you were handed a 'context' document.\n"
     "- Routing: use the reference information for product, family, pricing, and policy questions. "
-    "For pricing math (annual savings, cart totals) compute carefully and show the number "
-    "(dedicated cart/pricing tools arrive later). If earlier conversation is summarized above, "
-    "use it to resolve follow-ups like \"that one\" or \"the same plan\".")
+    "If earlier conversation is summarized above, use it to resolve follow-ups like \"that one\" "
+    "or \"the same plan\".")
 
 _UNGROUNDED_INSTRUCTIONS = (
     "You are the Nimbus assistant for Nimbus, an all-in-one business software suite.\n\n"
-    "No reference information is attached this turn, so answer from general knowledge and be "
-    "honest that you don't have Nimbus's specific catalog, pricing, or policy details to hand.")
+    "No reference document is attached this turn; answer from general knowledge, and if tools are "
+    "available use them to look up real product/pricing details rather than guessing.")
+
+_TOOLS_NOTE = (
+    "You can take actions and do exact pricing math with tools: add_to_cart, cart_total, checkout, "
+    "remove_item, checkout_item, clear_cart, annual_pricing, savings_annual_vs_monthly, "
+    "sort_products, top_k_expensive, product_info. When the user asks for a cart action, a total, "
+    "annual savings, a ranking, or a specific product's price, CALL the appropriate tool instead of "
+    "guessing — the tools read the real catalog and the live cart.")
 
 
 def build_system_prompt(
@@ -49,6 +55,7 @@ def build_system_prompt(
     response_length: str = "medium",
     override: str | None = None,
     grounded: bool = True,
+    tools_available: bool = False,
 ) -> str:
     """Assemble the system prompt: instructions (+ grounding block) then the length directive last.
 
@@ -62,6 +69,8 @@ def build_system_prompt(
     parts = [base]
     if grounded:
         parts.append(_GROUNDING_BLOCK.format(context=context))
+    if tools_available:
+        parts.append(_TOOLS_NOTE)
     parts.append(f"LENGTH REQUIREMENT (obey exactly): {length}")
     return "\n\n".join(parts)
 
@@ -72,10 +81,12 @@ def build_messages(
     response_length: str = "medium",
     system_prompt: str | None = None,
     grounded: bool = True,
+    tools_available: bool = False,
 ) -> list[dict[str, str]]:
     """The single-turn message list for a chat call (grounded RAGless, or ungrounded 'None')."""
     return [
-        {"role": "system", "content": build_system_prompt(context, response_length, system_prompt, grounded)},
+        {"role": "system",
+         "content": build_system_prompt(context, response_length, system_prompt, grounded, tools_available)},
         {"role": "user", "content": text},
     ]
 

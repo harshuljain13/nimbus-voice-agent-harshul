@@ -225,3 +225,53 @@ Contract converged on the reference (`message`/`model_key`/`use_context`, `{text
 - Summarization is best-effort — a failed summary keeps the previous one, never breaks the turn.
 - Answer model can be Gemini while embeddings/rerank/summary stay on OpenAI (separate keys).
 - Interrupt marker `[cancelled by user]` deferred to Phase 10 (barge-in).
+
+---
+
+## Phase 6 — Streaming vs batch ✅
+
+### Automated (`backend/tests/test_phase6.py`) — 2 passing (provider stream mocked)
+| # | Test | Verifies |
+|---|------|----------|
+| 6.1 | `test_stream_yields_deltas_then_done` | `/chat/stream` → delta events concatenate to the full text; a `done` event carries `llm_ttft_ms` + `total_ms`; `meta.mode == stream` |
+| 6.2 | `test_stream_error_event_on_empty_message` | empty message → an `error` event (not a crash) |
+
+### Live evaluation — `/chat/stream` yields tokens live (`Nimbus`, ` CRM`, ` is`, …).
+
+### Manual (playground) — checklist
+- [ ] **Mode → Streaming**, ask something → the answer **types out live**; "This turn" shows **TTFT**.
+- [ ] **⚖ Compare batch vs stream** → a table of TTFT / LLM ms / Total ms for each (total similar; streaming's TTFT ≪ total).
+- [ ] Metric rows are the **same set in both modes** (TTFT shows `— (batch)` in batch; streaming still reports tokens).
+- [ ] In RAG mode, TTFT is lower (smaller prompt).
+
+### Notes
+- Tools run in **batch** only; streaming is text-only. Shared `_prepare()` keeps both consistent.
+
+---
+
+## Phase 7 — Tools (11 tools + on/off) ✅
+
+### Automated (`backend/tests/test_phase7.py`) — 6 passing (LLM mocked)
+| # | Test | Verifies |
+|---|------|----------|
+| 7.1 | `test_cart_add_total_and_savings` | add_to_cart → cart_total = $90 (2×$45); savings = 20%; clear empties |
+| 7.2 | `test_catalog_tools` | top_k_expensive, sort_products (ascending), product_info (+ error on unknown) |
+| 7.3 | `test_remove_and_checkout_item` | checkout_item → NB- order id; cart empties |
+| 7.4 | `test_dispatch_respects_enable_list` | disabled tool → refused; enabled runs; enabled_specs(None)=11, ([])=0 |
+| 7.5 | `test_tools_and_cart_endpoints` | `/tools` = 11; `/cart` reflects the session cart |
+| 7.6 | `test_chat_runs_tool_loop` | `/chat tools_enabled` → `meta.tool_calls`, `latency.tool_ms` |
+
+### Live evaluation (real OpenAI function-calling)
+- "Add 3 seats of CRM Professional, then the monthly total" → `add_to_cart` + `cart_total` → **$135**; cart updated.
+- "Annual savings?" → `savings_annual_vs_monthly` → **$324/year (20%)** (exact — the Phase-5 LLM guessed wrong).
+
+### Manual (playground) — checklist
+- [ ] Tick **Tools** (Batch). "Add 3 seats of Nimbus CRM Professional + monthly total" → **$135**; "This turn" shows **add_to_cart + cart_total**; **Cart** fills.
+- [ ] "Annual savings?" → `savings_annual_vs_monthly` → **$324 (20%)**.
+- [ ] "3 most expensive products" → `top_k_expensive`; "clear my cart" → `clear_cart`.
+- [ ] **On/off (R2):** untick a tool (or **None**) → the model can't use it; toggle Tools off → pure conversation.
+
+### Edge cases covered
+- Disabled tool → refused at dispatch AND never advertised (two layers).
+- Any handler/arg failure returns a safe dict — never crashes the turn.
+- tools_enabled with no subset → all tools; a subset narrows it.

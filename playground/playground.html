@@ -12,7 +12,7 @@
   <header class="top">
     <div class="brand">
       <b>Nimbus <span class="grad">Playground</span></b>
-      <span class="phase-chip" id="phaseChip">Phase 5 · LLM controls</span>
+      <span class="phase-chip" id="phaseChip">Phase 7 · Tools</span>
     </div>
     <div class="top-right">
       <span class="health" id="health"><span class="dot"></span><span id="healthText">connecting…</span></span>
@@ -36,6 +36,15 @@
       <div class="field">
         <label for="model">Model</label>
         <select id="model"></select>
+      </div>
+
+      <div class="field">
+        <label>Mode</label>
+        <div class="seg" id="mode">
+          <button data-v="batch" class="active">Batch</button>
+          <button data-v="stream">Streaming</button>
+        </div>
+        <button class="btn ghost small" id="cmpModesBtn" style="margin-top:9px;">⚖ Compare batch vs stream</button>
       </div>
 
       <div class="field">
@@ -76,6 +85,15 @@
       </div>
 
       <div class="field">
+        <label class="tools-lbl"><input type="checkbox" id="toolsOn" /> Tools (cart &amp; pricing actions)</label>
+        <div id="toolsBox" hidden>
+          <div class="tools-actions"><button class="btn small ghost" id="toolAll">All</button><button class="btn small ghost" id="toolNone">None</button></div>
+          <div id="toolList" class="tool-list"></div>
+          <p class="hint">Batch mode only. Disabled tools are never offered to the model.</p>
+        </div>
+      </div>
+
+      <div class="field">
         <label for="sysPrompt">System prompt <span class="val" style="font-weight:400;color:var(--faint)">optional</span></label>
         <textarea id="sysPrompt" placeholder="Leave blank for the default Nimbus agent prompt."></textarea>
       </div>
@@ -111,6 +129,7 @@
     <aside class="card">
       <p class="eyebrow">This turn</p>
       <div id="turn"><p class="stat-empty">Send a message to see latency &amp; tokens.</p></div>
+      <div id="cart"></div>
     </aside>
   </main>
 
@@ -120,6 +139,7 @@
       <h2>API keys</h2>
       <p class="hint">Stored only in this browser (localStorage), sent per request. Never committed.</p>
       <div class="field"><label for="k_openai">OpenAI key</label><input class="text-in" id="k_openai" type="password" placeholder="sk-…" /></div>
+      <div class="field"><label for="k_gemini">Gemini key <span style="color:var(--faint)">(optional)</span></label><input class="text-in" id="k_gemini" type="password" placeholder="AIza…" /></div>
       <div class="field"><label for="apiBase">Backend URL</label><input class="text-in" id="apiBase" type="text" placeholder="http://localhost:8100" /></div>
       <div class="dlg-actions">
         <button value="cancel" class="btn ghost">Cancel</button>
@@ -143,7 +163,7 @@
   <!-- RAG vs RAGless comparison -->
   <dialog id="cmpDlg">
     <div class="dlg" style="width:min(560px,94vw)">
-      <h2>RAG vs RAGless</h2>
+      <h2 id="cmpTitle">Compare</h2>
       <p class="hint" id="cmpQ"></p>
       <div id="cmpBody"></div>
       <div class="dlg-actions"><button class="btn ghost" id="cmpClose">Close</button></div>

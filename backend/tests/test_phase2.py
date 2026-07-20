@@ -101,10 +101,9 @@ def test_chat_rejects_empty_and_bad_model(fake_openai):
     assert client.post("/chat", json={"message": "hi", "model_key": "nope"}).status_code == 400
 
 
-def test_chat_gemini_and_stream_deferred(fake_openai):
-    # Gemini → Phase 5; streaming → Phase 6. (RAG is live as of Phase 3 — tested in test_phase3.)
+def test_chat_gemini_needs_key(fake_openai):
+    # Gemini is a real provider (Phase 5) but errors 400 without a key (none in the test env).
     assert client.post("/chat", json={"message": "hi", "model_key": "gemini-flash"}).status_code == 400
-    assert client.post("/chat", json={"message": "hi", "mode": "stream"}).status_code == 400
 
 
 def test_chat_missing_key_is_a_clear_400(monkeypatch):
@@ -138,7 +137,7 @@ def test_models_lists_availability_by_key():
 def test_health_reports_corpus_and_stubs_load():
     h = client.get("/health").json()
     assert h["corpus"]["doc_count"] >= 31 and h["corpus"]["context_built"] is True
-    assert client.get("/tools").json()["tools"] == []          # Phase 7
-    assert client.get("/cart").json()["monthly_total"] == 0    # Phase 7
+    assert len(client.get("/tools").json()["tools"]) == 11     # the 11-tool suite (Phase 7)
+    assert client.get("/cart").json()["monthly_total"] == 0    # empty session
     assert "built" in client.get("/rag/status").json()         # real in Phase 3
     assert client.post("/session/reset", json={"session_id": "x"}).json()["ok"] is True
