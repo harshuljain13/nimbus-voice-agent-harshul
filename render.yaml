@@ -10,7 +10,9 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"          # faiss-cpu / numpy have Linux wheels for 3.12
       - key: EMBEDDING_PROFILE
         value: light
       - key: REQUIRE_USER_KEYS
-        value: "true"
+        value: "true"            # visitors bring their own key; your key is never used
