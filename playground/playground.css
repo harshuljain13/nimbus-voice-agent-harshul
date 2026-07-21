@@ -179,3 +179,11 @@ dialog::backdrop { background: rgba(4,6,10,.66); backdrop-filter: blur(2px); }
 .mic-btn.rec { background: rgba(248,113,113,.16); border-color: var(--bad); color: var(--bad); animation: micpulse 1s infinite; }
 @keyframes micpulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
 .asr-hint { font-size: 11.5px; color: var(--muted); padding: 4px 14px 0; }
+
+/* TTS (Phase 9) */
+.tts-row { display: flex; gap: 7px; }
+.tts-row select { min-width: 0; }
+.speak-btn { display: inline-block; margin-left: 8px; padding: 0 5px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--muted); border-radius: 6px; font-size: 12px; line-height: 1.5;
+  cursor: pointer; transition: .12s; vertical-align: middle; }
+.speak-btn:hover { border-color: var(--brand); color: var(--ink); }

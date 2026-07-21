@@ -16,11 +16,12 @@ import json
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import __version__, config
 from .asr import service as asr_service
+from .tts import service as tts_service
 from .latency import Timer, empty_trace
 from .llm import orchestrator as chat_orch
 from .rag import index as rag_index
@@ -40,6 +41,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-TTS-Ms", "X-TTS-Provider", "X-TTS-Voice"],
 )
 
 
@@ -231,6 +233,32 @@ async def asr(request: Request, file: UploadFile = File(...), provider: str = Fo
         return asr_service.transcribe(raw, provider, api_key)
     except asr_service.ASRError as e:
         raise HTTPException(status_code=e.status if e.status in (400, 401, 403, 429) else 502, detail=e.message)
+
+
+class TTSRequest(BaseModel):
+    text: str
+    provider: str = "openai"
+    voice: str | None = None
+
+
+@app.get("/tts/voices")
+def tts_voices() -> dict:
+    """Voices available per TTS provider (first = default)."""
+    return {"providers": list(tts_service.PROVIDERS), "voices": tts_service.VOICES}
+
+
+@app.post("/tts")
+def tts(req: TTSRequest, request: Request) -> Response:
+    """Synthesize speech (Phase 9). Returns audio bytes; tts_ms in the X-TTS-Ms header."""
+    api_key = config.resolve_key(req.provider, _headers_lower(request)) if req.provider in config.PROVIDERS else ""
+    try:
+        out = tts_service.synthesize(req.text, req.provider, req.voice, api_key)
+    except tts_service.TTSError as e:
+        raise HTTPException(status_code=e.status if e.status in (400, 401, 403, 429) else 502, detail=e.message)
+    return Response(
+        content=out["audio"], media_type=out["mime"],
+        headers={"X-TTS-Ms": str(out["tts_ms"]), "X-TTS-Provider": out["provider"], "X-TTS-Voice": out["voice"]},
+    )
 
 
 @app.get("/models")

@@ -12,7 +12,7 @@
   <header class="top">
     <div class="brand">
       <b>Nimbus <span class="grad">Playground</span></b>
-      <span class="phase-chip" id="phaseChip">Phase 8 · Voice input</span>
+      <span class="phase-chip" id="phaseChip">Phase 9 · Voice output</span>
     </div>
     <div class="top-right">
       <span class="health" id="health"><span class="dot"></span><span id="healthText">connecting…</span></span>
@@ -56,6 +56,20 @@
           <option value="elevenlabs">ElevenLabs · scribe</option>
         </select>
         <p class="hint">Click 🎤 in the chat box, speak, click again to stop — the transcript fills the input.</p>
+      </div>
+
+      <div class="field">
+        <label for="ttsProvider">Voice output (TTS)</label>
+        <div class="tts-row">
+          <select id="ttsProvider">
+            <option value="openai">OpenAI · gpt-4o-mini-tts</option>
+            <option value="gemini">Gemini</option>
+            <option value="elevenlabs">ElevenLabs</option>
+          </select>
+          <select id="ttsVoice"></select>
+        </div>
+        <label class="tools-lbl" style="margin-top:9px;"><input type="checkbox" id="ttsAuto" /> 🔊 Speak replies aloud</label>
+        <p class="hint">Auto-plays each answer. Or click 🔊 on any reply to hear it.</p>
       </div>
 
       <div class="field">

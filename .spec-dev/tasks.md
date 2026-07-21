@@ -5,8 +5,9 @@
 > design; controls are added incrementally per phase (no disabled stubs).
 
 ## Status
-**Phases 0–7 ✅ done (48 tests). Phase 12 widget + two-way cart bridge ✅ (deploy pending).
-Phases 8–11 (voice + dashboard) planned.** Pushed to `github.com/harshuljain13/nimbus-voice-agent-harshul`.
+**Phases 0–9 ✅ done (60 tests) — RAGless/RAG chat, LLM controls, streaming, tools, ASR, TTS.
+Phase 12 widget + two-way cart bridge ✅; deployed (Render + Vercel). Phases 10–11 (voice loop +
+dashboard) planned.** Pushed to `github.com/harshuljain13/nimbus-voice-agent-harshul`.
 
 [ ] Not started  [~] In progress  [x] Done
 
@@ -82,11 +83,12 @@ Note: interrupt `[cancelled by user]` moves to Phase 10 (voice loop, where barge
 🧪 You test: pick a provider, click 🎤, speak → your words fill the input. (5 tests; live-verified via a `say` clip → OpenAI returned it exactly)
 Note: live waveform/spectrogram deferred; the full mic→ASR→LLM→TTS loop is Phase 10.
 
-## Phase 9 — TTS (speech out)  (R10)  ← NEXT
-- [ ] Adapters: OpenAI + Gemini + ElevenLabs with playback buffer; `tts_ms` + `buffer_ms`.
-🧪 You test: agent's answer is spoken aloud; change provider/voice; see the buffer's latency cost.
+## Phase 9 — TTS (speech out)  (R10)  ✅ DONE
+- [x] `tts/service.py` — OpenAI (gpt-4o-mini-tts, MP3) / ElevenLabs (eleven_turbo_v2_5, MP3) / Gemini (2.5-flash-preview-tts, PCM→WAV); `POST /tts` (audio bytes + `X-TTS-Ms`) + `GET /tts/voices`.
+- [x] Playground: **Voice output (TTS)** provider+voice selector, **🔊 Speak replies** toggle + per-reply 🔊; `tts_ms` (synth) + `buffer_ms` (playback) folded into the **This turn** breakdown.
+🧪 You test: TTS→OpenAI, tick Speak replies, ask a question → answer is spoken; TTS + Buffer bars appear. (7 tests; live: real MP3 played back)
 
-## Phase 10 — Full voice loop + interrupt + endpointing  (R11 + R12)
+## Phase 10 — Full voice loop + interrupt + endpointing  (R11 + R12)  ← NEXT
 - [ ] WebSocket loop mic→ASR→(RAG)→LLM→tools→TTS→playback; barge-in (Off/Low/Med/High) stops TTS; endpoint silence slider (500/700 ms).
 🧪 You test: have a spoken back-and-forth; talk over it to interrupt; move the endpoint slider and feel it end turns sooner/later.
 

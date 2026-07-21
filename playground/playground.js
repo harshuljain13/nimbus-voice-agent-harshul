@@ -82,6 +82,54 @@ function browserASR() {
   asrRecognizer.start(); setMic(true); asrHint("🎤 listening… speak now");
 }
 
+// ---- TTS (voice output, Phase 9) ----
+async function loadVoices() {
+  try {
+    const d = await (await fetch(state.base + "/tts/voices")).json();
+    state.voices = d.voices || {};
+    fillVoices();
+  } catch { /* health already shows connection problems */ }
+}
+function fillVoices() {
+  const sel = $("ttsVoice"), list = (state.voices || {})[$("ttsProvider").value] || [];
+  sel.innerHTML = list.map((v) => `<option value="${v.id}">${v.label}</option>`).join("");
+}
+function attachSpeaker(pending, text) {
+  if (!text || !text.trim() || pending.querySelector(".speak-btn")) return;
+  const b = document.createElement("button");
+  b.className = "speak-btn"; b.title = "Play this reply"; b.textContent = "🔊";
+  b.onclick = () => speak(text);
+  pending.appendChild(b);
+}
+function afterAnswer(pending, text) {
+  attachSpeaker(pending, text);
+  if ($("ttsAuto").checked && text && text.trim()) speak(text);
+}
+async function speak(text) {
+  const provider = $("ttsProvider").value, voice = $("ttsVoice").value || null;
+  asrHint(`🔊 synthesizing (${provider})…`);
+  try {
+    const r = await fetch(state.base + "/tts", { method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ text, provider, voice }) });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); asrHint("TTS failed: " + (d.detail || r.status)); return; }
+    const ttsMs = Number(r.headers.get("X-TTS-Ms")) || 0;
+    const blob = await r.blob();
+    const tBuf = performance.now();               // measure the playback buffer: bytes → decodable
+    const url = URL.createObjectURL(blob);
+    const el = new Audio(url);
+    await new Promise((res, rej) => { el.oncanplaythrough = res; el.onerror = () => rej(new Error("decode")); el.load(); });
+    const bufMs = Math.round(performance.now() - tBuf);
+    el.onended = () => URL.revokeObjectURL(url);
+    await el.play();
+    asrHint(`🔊 ${provider} · synth ${Math.round(ttsMs)} ms · buffer ${bufMs} ms`);
+    if (state.turn) {                             // fold TTS + buffer into the "This turn" breakdown
+      state.turn.latency = state.turn.latency || {};
+      state.turn.latency.tts_ms = ttsMs; state.turn.latency.buffer_ms = bufMs;
+      renderTurn(state.turn);
+    }
+  } catch (e) { asrHint("TTS failed: " + e.message); }
+}
+
 // ---- chat ----
 function addMsg(kind, text) {
   const empty = $("empty");
@@ -189,6 +237,7 @@ async function batchTurn(message, pending) {
   pending.textContent = data.text;
   renderSources(pending, data);
   renderTurn(data);
+  afterAnswer(pending, data.text);
 }
 
 async function streamTurn(message, pending) {
@@ -211,7 +260,7 @@ async function streamTurn(message, pending) {
       let ev; try { ev = JSON.parse(line.slice(6)); } catch { continue; }
       if (ev.type === "delta") { acc += ev.text; pending.textContent = acc; $("messages").scrollTop = $("messages").scrollHeight; }
       else if (ev.type === "error") { pending.className = "msg err"; pending.textContent = ev.error; }
-      else if (ev.type === "done") { renderSources(pending, ev); renderTurn(ev); }
+      else if (ev.type === "done") { renderSources(pending, ev); renderTurn(ev); afterAnswer(pending, acc); }
     }
   }
 }
@@ -236,6 +285,7 @@ async function send(message) {
 // ---- right rail: this turn ----
 const STAGES = { asr_ms: "ASR", rag_ms: "RAG", llm_total_ms: "LLM", tool_ms: "Tools", tts_ms: "TTS", buffer_ms: "Buffer" };
 function renderTurn(data) {
+  state.turn = data;  // remember so TTS can fold its tts_ms/buffer_ms into this same breakdown
   const lat = data.latency || {}, meta = data.meta || {};
   const present = Object.entries(STAGES).filter(([k]) => (lat[k] || 0) > 0);
   const max = Math.max(1, ...present.map(([k]) => lat[k]));
@@ -411,6 +461,9 @@ function init() {
   $("compareBtn").addEventListener("click", compare);
   $("cmpModesBtn").addEventListener("click", compareModes);
   $("micBtn").addEventListener("click", toggleMic);
+  $("ttsProvider").addEventListener("change", () => { fillVoices(); persist(); });
+  $("ttsVoice").addEventListener("change", persist);
+  $("ttsAuto").addEventListener("change", persist);
   $("cmpClose").addEventListener("click", () => $("cmpDlg").close());
   $("topk").addEventListener("input", persist);
   $("resetBtn").addEventListener("click", async () => {
@@ -430,6 +483,6 @@ function init() {
     send(c.textContent);
   }));
   initKeys();
-  refreshHealth(); loadModels(); loadTools(); persist();
+  refreshHealth(); loadModels(); loadTools(); loadVoices(); persist();
 }
 init();

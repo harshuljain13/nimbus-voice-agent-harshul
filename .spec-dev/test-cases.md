@@ -302,3 +302,32 @@ Contract converged on the reference (`message`/`model_key`/`use_context`, `{text
 - Browser ASR is client-side (Web Speech); OpenAI/Gemini/ElevenLabs upload audio to `/asr`.
 - Audio transcoded to 16 kHz mono WAV (ffmpeg via `imageio-ffmpeg` — no apt needed on Render).
 - Live waveform/spectrogram + the full voice loop (barge-in) are Phase 10.
+
+---
+
+## Phase 9 — TTS / voice output ✅
+
+### Automated (`backend/tests/test_phase9.py`) — 7 passing (provider HTTP mocked)
+| # | Test | Verifies |
+|---|------|----------|
+| 9.1 | `test_synthesize_openai` | OpenAI → MP3 bytes + `{mime, tts_ms, provider, voice}` |
+| 9.2 | `test_synthesize_default_voice` | no voice → provider default (alloy) |
+| 9.3 | `test_synthesize_gemini_wraps_pcm` | Gemini base64 PCM → WAV (`RIFF…`), mime `audio/wav` |
+| 9.4 | `test_synthesize_guards` | unknown provider / missing key / empty text → TTSError |
+| 9.5 | `test_tts_endpoint` | `POST /tts` → audio body + `X-TTS-Ms` header |
+| 9.6 | `test_tts_voices` | `GET /tts/voices` lists providers + voices |
+| 9.7 | `test_tts_endpoint_unknown_provider` | bad provider → 400 |
+
+### Live evaluation (real OpenAI TTS)
+- `POST /tts` (openai, alloy) → valid 24 kHz mono MP3, `X-TTS-Ms` header; plays *"Welcome to Nimbus. How can I help you today?"* (synth ~5 s on first call).
+
+### Manual (playground) — checklist
+- [ ] **Voice output (TTS) → OpenAI**, pick a voice, tick **🔊 Speak replies aloud** → ask a question → the answer is **spoken**.
+- [ ] **This turn** panel shows **TTS** (synth) + **Buffer** (playback) bars alongside LLM.
+- [ ] Untick auto-play → click **🔊** on a past reply → it replays (no re-run of the LLM).
+- [ ] Change voice / provider → audio character changes (ElevenLabs needs its key; Gemini needs a working key).
+
+### Notes
+- OpenAI/ElevenLabs return MP3; Gemini returns 24 kHz PCM wrapped to WAV server-side.
+- `tts_ms` = server synthesis (from `X-TTS-Ms`); `buffer_ms` = client decode/buffer before playback.
+- The continuous mic→ASR→LLM→TTS loop with barge-in is Phase 10.

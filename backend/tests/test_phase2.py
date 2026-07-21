@@ -101,8 +101,9 @@ def test_chat_rejects_empty_and_bad_model(fake_openai):
     assert client.post("/chat", json={"message": "hi", "model_key": "nope"}).status_code == 400
 
 
-def test_chat_gemini_needs_key(fake_openai):
-    # Gemini is a real provider (Phase 5) but errors 400 without a key (none in the test env).
+def test_chat_gemini_needs_key(fake_openai, monkeypatch):
+    # Independent of the developer's .env: with no Gemini key, /chat errors 400.
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     assert client.post("/chat", json={"message": "hi", "model_key": "gemini-flash"}).status_code == 400
 
 

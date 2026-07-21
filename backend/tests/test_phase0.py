@@ -26,8 +26,10 @@ def test_health_ok():
     assert set(data["latency_demo"]) == set(TRACE_KEYS)
 
 
-def test_per_request_key_override():
-    # ElevenLabs is not in the test env; a per-request header must flip availability on.
+def test_per_request_key_override(monkeypatch):
+    # Independent of the developer's .env: ensure no ElevenLabs env key, then a per-request
+    # header must flip availability on.
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
     base = client.get("/health").json()["providers"]
     assert base["elevenlabs"] is False
     over = client.get("/health", headers={"X-ElevenLabs-Key": "el_test"}).json()["providers"]
