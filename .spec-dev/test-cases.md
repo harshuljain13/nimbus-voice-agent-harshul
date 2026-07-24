@@ -331,3 +331,42 @@ Contract converged on the reference (`message`/`model_key`/`use_context`, `{text
 - OpenAI/ElevenLabs return MP3; Gemini returns 24 kHz PCM wrapped to WAV server-side.
 - `tts_ms` = server synthesis (from `X-TTS-Ms`); `buffer_ms` = client decode/buffer before playback.
 - The continuous mic→ASR→LLM→TTS loop with barge-in is Phase 10.
+
+---
+
+## Phase 10 — Voice loop + barge-in + endpointing ✅
+
+### Automated (`backend/tests/test_phase10.py`) — 5 passing
+- `annotate_last_assistant` appends the note to the most recent assistant turn; returns `True`.
+- returns `False` when the session has no assistant turn (and for an unknown session).
+- `POST /session/cancel_last` → `{ok:true, annotated:true}` after an assistant turn.
+- `POST /session/cancel_last` with no assistant turn → `{ok:true, annotated:false}`.
+- empty `session_id` is handled (no crash, `annotated:false`).
+
+### Manual (playground `voice.html`) — checklist
+- [ ] Click the mic orb → it calibrates (~0.5s) then shows **listening…**; speak a question → after you pause it transcribes, thinks, and **speaks back**.
+- [ ] The transcript shows both your turn and the assistant's; the right rail shows the time-to-first-audio pie + total.
+- [ ] **Barge-in:** while it's speaking a long answer, talk over it → playback stops, the bubble marks **⏹ interrupted**, and it returns to listening. Tune the **Barge-in** select if it triggers too easily / not at all (headphones make it far more reliable).
+- [ ] **Endpoint slider:** lower it → turns end sooner after you stop talking; raise it → it waits longer.
+- [ ] **Batch vs Streaming:** toggle and compare the two TTFA rows — streaming should be lower.
+
+### Notes
+- The loop is a client-side state machine over the existing REST endpoints (no WebSocket) — mirrors the reference.
+- Endpointing = RMS energy + adaptive noise floor + silence timeout; barge-in = echo-aware residual with hysteresis + grace.
+
+---
+
+## Phase 11 — Latency dashboard ✅
+
+### Automated
+- No new backend surface (frontend-only callout); Phase 10 suite still green. `latency.py::stage_shares` already covered by earlier phases.
+
+### Manual (playground `voice.html`) — checklist
+- [ ] Complete a spoken turn → **Time-to-first-audio** panel shows the donut + total ms.
+- [ ] A **"Biggest stage: … — …ms (…%)"** callout appears above the legend, colour-matched to the largest slice.
+- [ ] The biggest-stage ms equals the largest row in the legend (sanity check).
+- [ ] Switch **Batch ↔ Streaming** and run another turn → the biggest stage typically shifts (batch is usually TTS-dominated).
+- [ ] Before any turn, the callout is hidden (no "Biggest stage" with a zero total).
+
+### Notes
+- R13 was ~90% delivered by the existing per-turn pie + batch-vs-streaming TTFA rows; this phase adds only the biggest-contributor callout.

@@ -88,15 +88,15 @@ Note: live waveform/spectrogram deferred; the full mic→ASR→LLM→TTS loop is
 - [x] Playground: **Voice output (TTS)** provider+voice selector, **🔊 Speak replies** toggle + per-reply 🔊; `tts_ms` (synth) + `buffer_ms` (playback) folded into the **This turn** breakdown.
 🧪 You test: TTS→OpenAI, tick Speak replies, ask a question → answer is spoken; TTS + Buffer bars appear. (7 tests; live: real MP3 played back)
 
-## Phase 10 — Full voice loop + interrupt + endpointing  (R11 + R12)  ← NEXT
-- [ ] WebSocket loop mic→ASR→(RAG)→LLM→tools→TTS→playback; barge-in (Off/Low/Med/High) stops TTS; endpoint silence slider (500/700 ms).
-🧪 You test: have a spoken back-and-forth; talk over it to interrupt; move the endpoint slider and feel it end turns sooner/later.
+## Phase 10 — Full voice loop + interrupt + endpointing  (R11 + R12)  ✅ DONE
+- [x] Client-side turn loop mic→VAD endpointing→/asr→/chat(/stream)→sentence /tts→playback (no WebSocket — mirrors reference, reuses tested REST); echo-aware barge-in (Off/Low/Med/High) stops TTS + `POST /session/cancel_last` annotates history; endpoint silence slider.
+🧪 You test: have a spoken back-and-forth; talk over it to interrupt; move the endpoint slider and feel it end turns sooner/later. (5 backend tests; loop VAD/endpointing/barge-in verified in-browser.)
 
-## Phase 11 — Latency dashboard  (R13)
-- [ ] Combine every stage into a pie/bar of % contribution + total ms; highlight the biggest stage.
-🧪 You test: after a turn, see the breakdown chart — which stage cost the most.
+## Phase 11 — Latency dashboard  (R13)  ✅ DONE
+- [x] Per-stage latency pie (ms + % per stage, total ms to first audio) already rendered per turn in the voice page + batch-vs-streaming TTFA rows — matches the reference's R13. Added the **biggest-contributor callout** (`#latBiggest`): names the slowest stage of the turn with its ms + %.
+🧪 You test: after a spoken turn, the pie shows each stage's ms/%, and the callout above the legend names the biggest stage (e.g. "Biggest stage: TTS — 620ms (58%)").
 
-## Phase 12 — Playground finalize + landing widget + deploy  (R14)  ◧ PARTIAL (brought forward)
+## Phase 12 — Playground finalize + landing widget + deploy  (R14)  ← NEXT · ◧ PARTIAL (brought forward)
 - [x] **`assets/widget.js` "Talk to Nimbus" chatbox on the site** (all pages), tool-enabled, **bridged to the site cart both ways**: pushes `nimbus_cart` → agent before a turn, syncs agent cart → `nimbus_cart` + repaints the drawer after. `POST /cart/set` seeds the session cart; `/cart` returns `product_id`.
 - [ ] Polish the playground further; deploy backend → Railway, frontend → Vercel (against the deployed backend).
 🧪 You test: on the Nimbus site, open **💬 Talk to Nimbus**, say "add Nimbus CRM Professional" → watch the site's **cart drawer** update live; "remove it" → it disappears. (widget + cart bridge done; deploy remains)

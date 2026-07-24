@@ -111,6 +111,16 @@ function renderPie(lat) {
   }
   ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2); ctx.fillStyle = "#12161f"; ctx.fill();
   $("latTotal").textContent = Math.round(total);
+  // Biggest contributor (R13): call out the slowest stage of this turn.
+  const bc = $("latBiggest");
+  const [topK, topV] = entries.reduce((m, e) => (e[1] > m[1] ? e : m), ["", 0]);
+  if (topV > 0) {
+    bc.hidden = false;
+    bc.innerHTML = `<span class="dot" style="background:${PIE[topK][1]}"></span>` +
+      `Biggest stage: <b>${PIE[topK][0]}</b> — ${Math.round(topV)}ms (${Math.round(topV / total * 100)}%)`;
+  } else {
+    bc.hidden = true;
+  }
   $("pieLegend").innerHTML = entries.map(([k, v]) =>
     `<div class="pl"><span class="dot" style="background:${PIE[k][1]}"></span><span>${PIE[k][0]}</span><span>${Math.round(v)}ms (${Math.round(v / total * 100)}%)</span></div>`
   ).join("");

@@ -52,6 +52,9 @@
 .lat-total { text-align: center; padding: 8px 0 12px; }
 .lat-total .n { font-size: 34px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
 .lat-total small { display: block; color: var(--faint); font-size: 11px; margin-top: 4px; letter-spacing: .04em; text-transform: uppercase; }
+.lat-biggest { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 7px 10px; border: 1px solid var(--line, #232a36); border-radius: 8px; background: #12161f; font-size: 12px; color: var(--muted); }
+.lat-biggest .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.lat-biggest b { color: var(--ink); }
 .pie-legend { display: flex; flex-direction: column; gap: 5px; }
 .pie-legend .pl { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .pie-legend .dot { width: 10px; height: 10px; border-radius: 3px; }
