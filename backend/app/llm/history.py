@@ -37,6 +37,19 @@ class HistoryStore:
         self._sessions[session_id] = s
         return s
 
+    def annotate_last_assistant(self, session_id: str, note: str) -> bool:
+        """Append a note to the most recent assistant turn (barge-in marker), so the stored
+        context reflects that TTS was interrupted mid-answer. Returns whether one was found."""
+        s = self.get(session_id)
+        turns = s["turns"]
+        for i in range(len(turns) - 1, -1, -1):
+            if turns[i]["role"] == "assistant":
+                updated = {**turns[i], "content": turns[i]["content"].rstrip() + " " + note}
+                new_turns = turns[:i] + [updated] + turns[i + 1:]
+                self._sessions[session_id] = {**s, "turns": new_turns}
+                return True
+        return False
+
 
 def split_for_context(turns: list[Turn], verbatim: int) -> tuple[list[Turn], list[Turn]]:
     """Return (older, recent) where `recent` is the last `verbatim` messages."""

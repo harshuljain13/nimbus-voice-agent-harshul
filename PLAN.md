@@ -21,9 +21,9 @@ is in [`.spec-dev/`](.spec-dev/). North star: [`.spec-dev/reference.md`](.spec-d
 | 5 | LLM controls | Gemini, history (verbatim-N + summary), RAG routing | ✅ |
 | 6 | Streaming vs batch | TTFT vs total + comparison | ✅ |
 | 7 | Tools | 11 cart/pricing tools + on/off selection + live cart | ✅ |
-| 8 | ASR | browser / OpenAI / Gemini / ElevenLabs | ◻ next |
-| 9 | TTS | OpenAI / Gemini / ElevenLabs + buffering | ◻ |
-| 10 | Voice loop | WS mic loop + barge-in + endpointing | ◻ |
+| 8 | ASR | browser / OpenAI / Gemini / ElevenLabs | ✅ |
+| 9 | TTS | OpenAI / Gemini / ElevenLabs + buffering | ✅ |
+| 10 | Voice loop | mic loop + VAD endpointing + barge-in | ✅ |
 | 11 | Latency dashboard | per-stage % + total | ◻ |
 | 12 | Widget + deploy | landing chatbox (✅ + cart bridge) + Vercel/Railway (deploy pending) | ◧ |
 

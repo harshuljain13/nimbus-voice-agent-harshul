@@ -1,0 +1,58 @@
+/* Nimbus voice loop (Phase 10) — layered on top of playground.css.
+   Only styles the voice-specific pieces: the mic orb, level meter, transcript, status
+   pill, and the time-to-first-audio pie/legend. Everything else reuses playground.css. */
+
+/* three columns: controls · mic stage · latency */
+.voice-grid { grid-template-columns: 288px 1fr 288px; }
+
+/* status pill in the header */
+.pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 11px; border: 1px solid var(--line-2); }
+.pill-muted { color: var(--muted); background: var(--surface); }
+.pill-ok { color: var(--ok); background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.35); }
+
+.sep { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+
+/* ---- center stage: mic orb + transcript ---- */
+.voice-stage { display: flex; flex-direction: column; height: calc(100vh - 100px); min-height: 520px; }
+.mic-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 26px 0 18px; border-bottom: 1px solid var(--line); }
+
+.mic-orb {
+  width: 96px; height: 96px; border-radius: 50%; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--muted); cursor: pointer;
+  display: grid; place-items: center; transition: .15s;
+}
+.mic-orb:hover { border-color: var(--brand); color: var(--ink); }
+.mic-orb.listening { background: var(--grad); color: #fff; border: 0; box-shadow: 0 0 0 6px rgba(124,140,255,.14); }
+.mic-orb.recording { background: rgba(248,113,113,.16); border-color: var(--bad); color: var(--bad); animation: orbpulse 1s infinite; }
+.mic-orb.speaking  { background: rgba(251,191,36,.16); border-color: var(--warn); color: var(--warn); }
+@keyframes orbpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(248,113,113,.4); } 50% { box-shadow: 0 0 0 12px rgba(248,113,113,0); } }
+
+/* live mic level meter */
+.level { width: 180px; height: 6px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.level i { display: block; height: 100%; width: 0; background: var(--grad); border-radius: 4px; transition: width .06s linear; }
+.phase { font-size: 12.5px; color: var(--muted); text-align: center; min-height: 1.4em; }
+
+/* transcript */
+.transcript { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.t-msg { max-width: 82%; padding: 10px 13px; border-radius: 13px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+.t-user { align-self: flex-end; background: var(--grad); color: #fff; border-bottom-right-radius: 5px; }
+.t-assistant { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line-2); border-bottom-left-radius: 5px; }
+/* the sentence (or whole bubble, in batch) currently being spoken */
+.t-sent { transition: background .15s; border-radius: 5px; }
+.t-sent.speaking, .t-assistant.speaking {
+  background: rgba(124,140,255,.22);
+  box-shadow: inset 0 -2px 0 var(--brand);
+}
+.t-assistant.cancelled { opacity: .6; }
+.t-assistant.cancelled::after { content: " ⏹ interrupted"; color: var(--warn); font-size: 11px; }
+.t-meta { align-self: center; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* ---- latency pie ---- */
+#pie { display: block; margin: 4px auto 0; }
+.lat-total { text-align: center; padding: 8px 0 12px; }
+.lat-total .n { font-size: 34px; font-weight: 700; letter-spacing: -.02em; line-height: 1; }
+.lat-total small { display: block; color: var(--faint); font-size: 11px; margin-top: 4px; letter-spacing: .04em; text-transform: uppercase; }
+.pie-legend { display: flex; flex-direction: column; gap: 5px; }
+.pie-legend .pl { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.pie-legend .dot { width: 10px; height: 10px; border-radius: 3px; }
+.pie-legend .pl span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nimbus Voice Agent · Voice loop</title>
+  <link rel="icon" href="../frontend/assets/favicon.svg" />
+  <link rel="stylesheet" href="playground.css" />
+  <link rel="stylesheet" href="voice.css" />
+  <script src="runtime-config.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <b>Nimbus <span class="grad">Voice</span></b>
+      <span class="phase-chip">Phase 10 · Voice loop</span>
+    </div>
+    <div class="top-right">
+      <span id="status" class="pill pill-muted">idle</span>
+      <a class="btn small ghost" href="playground.html">Playground</a>
+      <button class="btn small ghost" id="keysBtn">API keys</button>
+    </div>
+  </header>
+
+  <main class="grid voice-grid">
+    <!-- Controls -->
+    <aside class="card">
+      <p class="eyebrow">Voice pipeline</p>
+
+      <div class="field">
+        <label for="asr">Voice input (ASR)</label>
+        <select id="asr">
+          <option value="browser">Browser · Web Speech (no key)</option>
+          <option value="openai">OpenAI · gpt-4o-transcribe</option>
+          <option value="gemini">Gemini</option>
+          <option value="elevenlabs">ElevenLabs · scribe</option>
+        </select>
+        <p class="hint" id="asrHint"></p>
+      </div>
+
+      <div class="field">
+        <label for="tts">Voice output (TTS)</label>
+        <div class="tts-row">
+          <select id="tts">
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+            <option value="elevenlabs">ElevenLabs</option>
+          </select>
+          <select id="voice"></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Endpoint silence <span class="val" id="epVal">900</span> ms</label>
+        <input type="range" id="endpoint" min="200" max="3000" step="50" value="900" />
+        <p class="hint">How long a pause ends your turn (server ASR). Or just press <b>Space</b> / tap the mic to send instantly — no waiting.</p>
+      </div>
+
+      <div class="field">
+        <label>TTS pre-buffer <span class="val" id="bufVal">150</span> ms</label>
+        <input type="range" id="buffer" min="0" max="1000" step="50" value="150" />
+        <p class="hint">Audio buffered before playback starts. More = smoother, higher latency.</p>
+      </div>
+
+      <div class="field">
+        <label>Pipeline mode</label>
+        <div class="seg" id="mode">
+          <button data-v="batch">Batch</button>
+          <button data-v="stream" class="active">Streaming</button>
+        </div>
+        <p class="hint">Streaming speaks sentence-by-sentence as the LLM writes — lower time-to-first-audio.</p>
+      </div>
+
+      <div class="field">
+        <label for="barge">Barge-in (interrupt)</label>
+        <select id="barge">
+          <option value="off">Off (no interrupt)</option>
+          <option value="low" selected>Low sensitivity (default)</option>
+          <option value="medium">Medium sensitivity</option>
+          <option value="high">High sensitivity</option>
+        </select>
+        <p class="hint">Talk over the agent to stop it. Echo-aware double-talk detector — lower = fewer accidental cut-offs; headphones help.</p>
+      </div>
+
+      <hr class="sep" />
+
+      <div class="field">
+        <label for="model">Model</label>
+        <select id="model"></select>
+      </div>
+
+      <div class="field">
+        <label>Knowledge source</label>
+        <div class="seg" id="knowledge">
+          <button data-v="ragless">RAGless</button>
+          <button data-v="rag" class="active">RAG</button>
+          <button data-v="none">None</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="tools-lbl"><input type="checkbox" id="toolsEnabled" checked /> Tools (cart &amp; pricing actions)</label>
+        <p class="hint">Batch mode only. Disabled tools are never offered to the model.</p>
+      </div>
+    </aside>
+
+    <!-- Center: mic + transcript -->
+    <section class="card voice-stage">
+      <div class="mic-wrap">
+        <button id="mic" class="mic-orb" aria-label="Start listening">
+          <svg viewBox="0 0 24 24" width="34" height="34"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg>
+        </button>
+        <div class="level"><i id="levelBar"></i></div>
+        <div id="phase" class="phase">Press the mic to start a conversation</div>
+      </div>
+      <div id="transcript" class="transcript"></div>
+    </section>
+
+    <!-- Latency pie -->
+    <aside class="card">
+      <p class="eyebrow">Time-to-first-audio</p>
+      <canvas id="pie" width="220" height="220"></canvas>
+      <div class="lat-total"><span class="n grad" id="latTotal">0</span><small>ms to first audio</small></div>
+      <div id="pieLegend" class="pie-legend"></div>
+      <table class="cmp" style="margin-top:14px;">
+        <thead><tr><th></th><th>TTFA</th></tr></thead>
+        <tbody>
+          <tr><td>Batch</td><td id="ttfaBatch">–</td></tr>
+          <tr><td>Streaming</td><td id="ttfaStream">–</td></tr>
+        </tbody>
+      </table>
+    </aside>
+  </main>
+
+  <!-- API keys (shares storage with the playground) -->
+  <dialog id="keysDlg">
+    <form method="dialog" class="dlg">
+      <h2>API keys</h2>
+      <p class="hint">Stored only in this browser (localStorage, shared with the playground), sent per request. Never committed.</p>
+      <div class="field"><label for="k_openai">OpenAI key</label><input class="text-in" id="k_openai" type="password" placeholder="sk-…" /></div>
+      <div class="field"><label for="k_gemini">Gemini key <span style="color:var(--faint)">(optional)</span></label><input class="text-in" id="k_gemini" type="password" placeholder="AIza…" /></div>
+      <div class="field"><label for="k_elevenlabs">ElevenLabs key <span style="color:var(--faint)">(optional · ASR/TTS)</span></label><input class="text-in" id="k_elevenlabs" type="password" placeholder="…" /></div>
+      <div class="field"><label for="apiBase">Backend URL</label><input class="text-in" id="apiBase" type="text" placeholder="http://localhost:8100" /></div>
+      <div class="dlg-actions">
+        <button value="cancel" class="btn ghost">Cancel</button>
+        <button value="save" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="voice.js"></script>
+</body>
+</html>

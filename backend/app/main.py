@@ -330,6 +330,16 @@ def session_reset(req: SessionRef) -> dict:
     return {"ok": True}
 
 
+@app.post("/session/cancel_last")
+def session_cancel_last(req: SessionRef) -> dict:
+    """Barge-in (Phase 10): mark the last assistant turn as interrupted, so the stored
+    history reflects that its answer was cut off mid-TTS."""
+    annotated = bool(req.session_id) and chat_orch.HISTORY.annotate_last_assistant(
+        req.session_id, "[cancelled by the user]"
+    )
+    return {"ok": True, "annotated": annotated}
+
+
 # --------------------------------------------------------------------------- #
 # Phase 3 — RAG retrieval (R5): chunk · embed · FAISS · top-k                  #
 # --------------------------------------------------------------------------- #

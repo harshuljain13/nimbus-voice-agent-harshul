@@ -158,5 +158,10 @@ def project_query(query_vec: np.ndarray) -> dict:
     proj = projection()
     mean = np.array(proj["pca"]["mean"], dtype="float32")
     comps = np.array(proj["pca"]["components"], dtype="float32")
+    if mean.shape[-1] != query_vec.reshape(-1).shape[0]:
+        raise RuntimeError(
+            f"Projection is stale (basis dim {mean.shape[-1]} ≠ query dim {query_vec.reshape(-1).shape[0]}). "
+            "POST /rag/build to regenerate."
+        )
     xy = viz_math.project(query_vec, mean, comps)[0]
     return {"x": float(xy[0]), "y": float(xy[1])}
