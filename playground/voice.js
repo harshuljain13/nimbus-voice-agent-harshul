@@ -245,7 +245,13 @@ function startBrowserASR() {
     if (!text || state.phase === "thinking" || state.phase === "speaking") return;
     if (isSelfEcho(text)) return;   // mic heard the agent's own reply
     addMsg("user", text);
-    const asrMs = state.speechEndTs ? Math.round(performance.now() - state.speechEndTs) : 0;
+    // Browser Web Speech is on-device: asr_ms = recognition latency since speech ended.
+    // Consume speechEndTs (reset to 0) so a later result can't reuse a stale timestamp, and
+    // clamp implausible deltas — a large gap is idle wall-clock, not ASR compute, and would
+    // otherwise dominate the TTFA breakdown with a bogus 20s+ "ASR" slice.
+    const delta = state.speechEndTs ? performance.now() - state.speechEndTs : 0;
+    state.speechEndTs = 0;
+    const asrMs = delta > 0 && delta < 4000 ? Math.round(delta) : 0;
     await runPipeline(text, asrMs);
   };
   rec.onerror = () => {};
