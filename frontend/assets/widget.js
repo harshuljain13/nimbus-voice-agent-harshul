@@ -35,6 +35,9 @@ const AGENT = {
   endpoint: 700, buffer: 120,  // ms: end-of-turn silence, TTS pre-roll
 };
 const BARGE_PRESETS = { off: { en: false, th: 1, fr: 999 }, low: { en: true, th: 0.09, fr: 11 }, medium: { en: true, th: 0.06, fr: 8 }, high: { en: true, th: 0.04, fr: 5 } };
+// Static fallbacks so the ⚙ dropdowns populate instantly (no dependency on the cold-start /models fetch).
+const MODELS = [["openai-heavy", "OpenAI · gpt-4o"], ["openai-lite", "OpenAI · gpt-4o-mini"], ["gemini-pro", "Gemini · 2.5 Pro"], ["gemini-flash", "Gemini · 2.5 Flash"]];
+const VOICE_FALLBACK = { openai: [["alloy", "Alloy"], ["echo", "Echo"], ["fable", "Fable"], ["onyx", "Onyx"], ["nova", "Nova"], ["shimmer", "Shimmer"]].map(([id, label]) => ({ id, label })) };
 
 function sessionId() {
   let s = localStorage.getItem(SID_KEY);
@@ -182,7 +185,7 @@ export function mountWidget() {
   async function syncAgentToSite(openDrawer) {
     try {
       const d = await (await fetch(BASE + "/cart?session_id=" + encodeURIComponent(sessionId()))).json();
-      const items = d.items.map((i) => ({ product_id: i.product_id, product_name: i.product_name, tier: i.tier, seats: i.seats, price: i.price_monthly }));
+      const items = (d.items || []).map((i) => ({ product_id: i.product_id, product_name: i.product_name, tier: i.tier, seats: i.seats, price: i.price_monthly }));
       localStorage.setItem(CART_KEY, JSON.stringify(items));
       if (window.__nimbusCart) { window.__nimbusCart.refresh(); if (openDrawer && items.length) window.__nimbusCart.open(); }
     } catch {}
@@ -193,10 +196,13 @@ export function mountWidget() {
   // (onSentence). Returns { text, meta, ok }. On a key error, opens the keys dialog.
   async function streamTurn(message, bubble, onSentence) {
     await syncSiteToAgent();
+    // Render free tier cold-starts (~50s) — tell the user instead of spinning forever.
+    const wake = setTimeout(() => { if (bubble.textContent === "…" || bubble.textContent === "") bubble.textContent = "⏳ Waking the server (first request can take ~50s on the free tier)…"; }, 4000);
     let r;
     try {
       r = await fetch(BASE + "/chat/stream", { method: "POST", headers: jsonHeaders(), body: chatBody(message) });
-    } catch { bubble.textContent = "Can't reach the Nimbus agent. Is the backend running?"; return { ok: false }; }
+    } catch { clearTimeout(wake); bubble.textContent = "Can't reach the Nimbus agent. Is the backend running?"; return { ok: false }; }
+    clearTimeout(wake);
     if (!r.ok) {
       const data = await r.json().catch(() => ({}));
       if (r.status === 400 && /key/i.test(data.detail || "")) { bubble.textContent = "Add your API key to chat →"; openKeys(); return { ok: false, keyNeeded: true }; }
@@ -227,10 +233,10 @@ export function mountWidget() {
       while (true) {
         const { done, value } = await reader.read(); if (done) break;
         sseBuf += dec.decode(value, { stream: true });
-        const parts = sseBuf.split("\n\n"); sseBuf = parts.pop();
+        const parts = sseBuf.split(/\r?\n\r?\n/); sseBuf = parts.pop();   // tolerate LF or CRLF framing
         for (const p of parts) {
-          const line = p.split("\n").find((l) => l.startsWith("data: ")); if (!line) continue;
-          const ev = JSON.parse(line.slice(6));
+          const line = p.split(/\r?\n/).find((l) => l.startsWith("data:")); if (!line) continue;
+          let ev; try { ev = JSON.parse(line.slice(5).trim()); } catch { continue; }   // skip a bad/keep-alive frame, not the whole turn
           if (ev.type === "delta") { acc += ev.text; pending += ev.text; bubble.textContent = acc; scroll(); await commit(false); }
           else if (ev.type === "done") { meta = ev.meta; }
           else if (ev.type === "error") { bubble.textContent = "Error: " + ev.error; return { ok: false }; }
@@ -256,7 +262,7 @@ export function mountWidget() {
     on: false, phase: "idle", stream: null, ac: null, an: null, buf: null, noise: 0.01,
     ttsAn: null, ttsBuf: null, rec: null, sr: null, chunks: [], lastVoice: 0, voicedFrames: 0,
     queue: [], src: null, playing: false, cancelled: false, echoGain: 0.4, bargeFrames: 0, playTs: 0,
-    answerComplete: false, pendingAudio: 0, lastBubble: null, lastReply: "",
+    answerComplete: false, pendingAudio: 0, pendingSynth: 0, lastBubble: null, lastReply: "",
   };
   const BARGE_GRACE = 500, LISTEN_GUARD_MS = 400;
   const bargeP = () => BARGE_PRESETS[AGENT.barge] || BARGE_PRESETS.low;
@@ -365,17 +371,19 @@ export function mountWidget() {
 
   // voice turn: stream reply, synth each sentence as it lands, play in order, resume when drained
   async function runVoicePipeline(userText) {
-    V.cancelled = false; V.answerComplete = false; V.pendingAudio = 0;
+    V.cancelled = false; V.answerComplete = false; V.pendingAudio = 0; V.pendingSynth = 0;
     if (!serverAsr()) stopBrowserASR();   // don't let speech recognition hear our own TTS (resume restarts it)
     V.phase = "thinking"; status("thinking…");
     const bubble = add("bot", ""); V.lastBubble = bubble;
     let spoke = false;
     const onSentence = async (sentence) => {
       if (V.cancelled) return;
+      V.pendingSynth++;   // counts an in-flight synth so the drain check won't resume before it lands
       const audio = await synth(sentence.trim());
-      if (!audio || V.cancelled) return;
+      if (!audio || V.cancelled) { V.pendingSynth--; return; }
       if (!spoke) { spoke = true; beginSpeaking(); await new Promise((r) => setTimeout(r, AGENT.buffer)); }  // pre-buffer
-      enqueue(audio);
+      enqueue(audio);     // increments pendingAudio synchronously before we drop pendingSynth
+      V.pendingSynth--;
     };
     const res = await streamTurn(userText, bubble, onSentence);
     V.lastReply = res.text || "";
@@ -385,12 +393,20 @@ export function mountWidget() {
     endSpeakingIfDone();
   }
 
+  const ttsFetch = (provider, voice, text) =>
+    fetch(BASE + "/tts", { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ text, provider, voice }) });
   async function synth(text) {
     try {
-      const r = await fetch(BASE + "/tts", { method: "POST", headers: jsonHeaders(), body: JSON.stringify({ text, provider: AGENT.tts, voice: AGENT.voice }) });
-      if (!r.ok) return null;
+      let r = await ttsFetch(AGENT.tts, AGENT.voice, text);
+      // ElevenLabs / Gemini TTS need their OWN key; visitors usually only bring an OpenAI key, so
+      // fall back to OpenAI's voice rather than failing silently.
+      if (!r.ok && AGENT.tts !== "openai" && agentKeys().openai) {
+        status(`🔊 ${AGENT.tts} voice needs its own key — using OpenAI`);
+        r = await ttsFetch("openai", "alloy", text);
+      }
+      if (!r.ok) { status("🔇 Voice output failed — add your API key (🔑)"); return null; }
       return await r.arrayBuffer();
-    } catch { return null; }
+    } catch { status("🔇 Voice output failed"); return null; }
   }
   function beginSpeaking() {
     // playTs is set when the FIRST audio buffer actually starts (in playNext), so the grace
@@ -420,10 +436,10 @@ export function mountWidget() {
   }
   // resume listening only once the whole answer is synthesized AND all audio has drained
   function endSpeakingIfDone() {
-    if (V.phase === "speaking" && V.answerComplete && !V.playing && V.queue.length === 0 && V.pendingAudio === 0) resume();
+    if (V.phase === "speaking" && V.answerComplete && !V.playing && V.queue.length === 0 && V.pendingAudio === 0 && V.pendingSynth === 0) resume();
   }
   function stopAudio() {
-    V.cancelled = true; V.queue = []; V.pendingAudio = 0;
+    V.cancelled = true; V.queue = []; V.pendingAudio = 0; V.pendingSynth = 0;
     document.querySelectorAll(".nbw-speaking").forEach((e) => e.classList.remove("nbw-speaking"));
     if (V.src) { try { V.src.onended = null; V.src.stop(); } catch {} V.src = null; }
     V.playing = false;
@@ -457,6 +473,11 @@ export function mountWidget() {
   function stopVoice() {
     V.on = false; stopAudio(); stopBrowserASR();
     if (V.rec && V.rec.state !== "inactive") try { V.rec.stop(); } catch {}
+    // release the microphone (otherwise the browser mic indicator stays lit) and tear down audio;
+    // ensureMic() rebuilds everything on the next start.
+    if (V.stream) { V.stream.getTracks().forEach((t) => t.stop()); V.stream = null; }
+    if (V.ac) { try { V.ac.close(); } catch {} V.ac = null; }
+    V.an = V.buf = V.ttsAn = V.ttsBuf = null;
     V.phase = "idle"; setMic(""); status("");
   }
   micBtn.addEventListener("click", () => { V.on ? stopVoice() : startVoice(); });
@@ -497,7 +518,7 @@ export function mountWidget() {
   function buildSettings() {
     setEl.innerHTML = `
       <h4>Model & voice settings</h4>
-      <label>Chat model<select id="nbwsModel"></select></label>
+      <label>Chat model<select id="nbwsModel">${MODELS.map(([k, l]) => `<option value="${k}"${k === AGENT.model_key ? " selected" : ""}>${l}</option>`).join("")}</select></label>
       <div class="nbw-row">
         <label>Knowledge<select id="nbwsKnow">${opt(["rag", "ragless", "none"], AGENT.knowledge, { rag: "RAG (retrieve)", ragless: "Full context", none: "None" })}</select></label>
         <label class="nbw-tg">Tools (cart)<input type="checkbox" id="nbwsTools"${AGENT.tools_enabled ? " checked" : ""}></label>
@@ -510,16 +531,20 @@ export function mountWidget() {
       <label>Barge-in (interrupt)<select id="nbwsBarge">${opt(["off", "low", "medium", "high"], AGENT.barge, { off: "Off", low: "Low sensitivity", medium: "Medium sensitivity", high: "High sensitivity" })}</select></label>
       <button class="nbw-save" id="nbwsSave">Save settings</button>
       <div class="nbw-note">Full controls (latency, RAG viz, system prompt) live in the <a href="playground/playground.html" target="_blank" rel="noopener">Playground ↗</a></div>`;
+    // Model select is already seeded from MODELS above; voices seed from the fallback then refine.
+    if (!Object.keys(VOICEMAP).length) VOICEMAP = { ...VOICE_FALLBACK };
+    syncVoiceSel(AGENT.voice);
     fetch(BASE + "/models", { headers: keyHeaders() }).then((r) => r.json()).then((d) => {
-      setEl.querySelector("#nbwsModel").innerHTML = d.models.map((m) => `<option value="${m.key}"${m.key === AGENT.model_key ? " selected" : ""}>${m.label}</option>`).join("");
+      if (d && d.models && d.models.length) setEl.querySelector("#nbwsModel").innerHTML = d.models.map((m) => `<option value="${m.key}"${m.key === AGENT.model_key ? " selected" : ""}>${m.label}</option>`).join("");
     }).catch(() => {});
-    fetch(BASE + "/tts/voices").then((r) => r.json()).then((d) => { VOICEMAP = d.voices || {}; syncVoiceSel(AGENT.voice); }).catch(() => {});
+    fetch(BASE + "/tts/voices").then((r) => r.json()).then((d) => { if (d && d.voices && Object.keys(d.voices).length) { VOICEMAP = d.voices; syncVoiceSel(AGENT.voice); } }).catch(() => {});
     setEl.querySelector("#nbwsTts").addEventListener("change", () => syncVoiceSel());
     setEl.querySelector("#nbwsSave").addEventListener("click", saveSettings);
   }
   function saveSettings() {
     const val = (id) => setEl.querySelector(id).value;
-    AGENT.model_key = val("#nbwsModel"); AGENT.asr = val("#nbwsAsr"); AGENT.tts = val("#nbwsTts");
+    AGENT.model_key = val("#nbwsModel") || AGENT.model_key;   // never save an empty model
+    AGENT.asr = val("#nbwsAsr"); AGENT.tts = val("#nbwsTts");
     AGENT.voice = val("#nbwsVoice"); AGENT.barge = val("#nbwsBarge");
     AGENT.knowledge = val("#nbwsKnow"); AGENT.tools_enabled = setEl.querySelector("#nbwsTools").checked;
     localStorage.setItem("nimbus_widget_cfg", JSON.stringify({
