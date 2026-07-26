@@ -203,19 +203,63 @@ async def chat(*, message, model_key="openai-lite", response_length="medium", us
 
 
 async def chat_stream(*, message, model_key="openai-lite", response_length="medium", use_context=True,
-                      use_rag=False, top_k=4, rerank=False, verbatim_turns=6, system_prompt=None,
+                      use_rag=False, top_k=4, rerank=False, verbatim_turns=6, tools_enabled=False,
+                      enabled_tools=None, system_prompt=None,
                       temperature=0.3, session_id=None, headers=None) -> AsyncIterator[dict[str, Any]]:
-    """Stream a chat turn (text-only; tools run in batch mode). Yields delta/done/error events."""
+    """Stream a chat turn. Yields delta/done/error events.
+
+    When tools are active the model takes several non-streamed steps, so we run the batch tool
+    loop and emit the resolved answer as a single delta — the frontend's SSE code path is identical
+    either way, and the cart still updates. Pure Q&A (no tools) streams token-by-token.
+    """
     total = Timer()
     try:
         ctx = await _prepare(message=message, model_key=model_key, response_length=response_length,
                              use_context=use_context, use_rag=use_rag, top_k=top_k, rerank=rerank,
                              verbatim_turns=verbatim_turns, system_prompt=system_prompt,
-                             session_id=session_id, headers=headers)
+                             session_id=session_id, headers=headers,
+                             tools_enabled=tools_enabled, enabled_tools=enabled_tools)
     except ChatError as e:
         yield {"type": "error", "error": e.message}
         return
     trace, spec, provider = ctx["trace"], ctx["spec"], ctx["provider"]
+    max_tokens = prompts.max_tokens_for(response_length)
+
+    # ---- tool turns: run the tool loop with STREAMING calls. The cart tools execute mid-loop; the
+    #      FINAL answer (the turn where the model responds instead of calling a tool) streams
+    #      token-by-token, so tools + real streaming coexist. ----
+    if ctx["tools_available"]:
+        llm_timer = Timer()
+        ttft = None
+        final = {"text": "", "usage": {}, "tool_ms": 0.0, "tool_calls": []}
+        try:
+            async for ev in openai_provider.stream_with_tools(
+                    messages=ctx["final"], model=spec["model"], api_key=ctx["llm_key"],
+                    tool_schema=tool_registry.openai_schema(ctx["specs"]),
+                    dispatch=tool_registry.make_dispatch(session_id or "anon", enabled_tools or None),
+                    max_tokens=max_tokens, temperature=temperature):
+                if ev["type"] == "delta":
+                    if ttft is None:
+                        ttft = llm_timer.ms()
+                    yield {"type": "delta", "text": ev["text"]}
+                elif ev["type"] == "final":
+                    final = ev
+        except ProviderError as e:
+            yield {"type": "error", "error": e.message}
+            return
+        text = final["text"]
+        trace["llm_ttft_ms"] = ttft if ttft is not None else llm_timer.ms()
+        trace["llm_total_ms"] = llm_timer.ms()
+        trace["tool_ms"] = final["tool_ms"]
+        trace["total_ms"] = total.ms()
+        if session_id:
+            HISTORY.append(session_id, "user", ctx["message"])
+            HISTORY.append(session_id, "assistant", text)
+        meta = _build_meta(ctx, mode="stream(tools)", model=spec["model"],
+                           usage=final.get("usage", {}), tool_calls=final["tool_calls"])
+        yield {"type": "done", "text": text, "latency": trace, "meta": meta}
+        return
+
     acc = ""
     llm_timer = Timer()
     try:

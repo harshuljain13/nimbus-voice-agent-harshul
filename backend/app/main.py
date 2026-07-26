@@ -195,14 +195,19 @@ async def chat(req: ChatRequest, request: Request) -> dict:
 
 @app.post("/chat/stream")
 async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
-    """Server-sent-events stream of the answer (Phase 6). Tools run in batch mode only."""
+    """Server-sent-events stream of the answer (Phase 6).
+
+    Pure Q&A streams token-by-token; when tools are enabled the tool loop runs (batch) and the
+    resolved answer is emitted as a single delta, so the cart works over the streaming path too.
+    """
     headers = _headers_lower(request)
 
     async def gen():
         async for ev in chat_orch.chat_stream(
                 message=req.message, model_key=req.model_key, response_length=req.response_length,
                 use_context=req.use_context, use_rag=req.use_rag, top_k=req.top_k, rerank=req.rerank,
-                verbatim_turns=req.verbatim_turns, system_prompt=req.system_prompt,
+                verbatim_turns=req.verbatim_turns, tools_enabled=req.tools_enabled,
+                enabled_tools=req.enabled_tools, system_prompt=req.system_prompt,
                 temperature=req.temperature, session_id=req.session_id, headers=headers):
             yield f"data: {json.dumps(ev)}\n\n"
 

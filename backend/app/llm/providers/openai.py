@@ -153,6 +153,100 @@ async def complete_with_tools(
             "tool_ms": round(tool_ms, 2), "tool_calls": trace}
 
 
+async def stream_with_tools(
+    *,
+    messages: list[dict[str, str]],
+    model: str,
+    api_key: str,
+    tool_schema: list[dict],
+    dispatch,
+    max_tokens: int,
+    temperature: float = 0.3,
+    max_iters: int = 6,
+    timeout: float = 60.0,
+) -> AsyncIterator[dict[str, Any]]:
+    """Streaming function-calling loop (Phase 6+7).
+
+    Same loop as ``complete_with_tools``, but every model call is streamed. A tool-call turn emits
+    no user content (just accumulates the calls, which we execute), so nothing streams during it;
+    the FINAL turn — where the model answers instead of calling a tool — streams token-by-token.
+
+    Yields ``{"type":"delta","text":...}`` for each answer token, then one
+    ``{"type":"final","text","usage","tool_ms","tool_calls"}``.
+    """
+    if not api_key:
+        raise OpenAIError(400, "No OpenAI API key — set OPENAI_API_KEY or send an X-OpenAI-Key header.")
+    native = [dict(m) for m in messages]
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    tool_ms = 0.0
+    trace: list[dict] = []
+    usage: dict = {}
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for _ in range(max_iters):
+            payload = {"model": model, "messages": native, "max_tokens": max_tokens,
+                       "temperature": temperature, "tools": tool_schema, "tool_choice": "auto",
+                       "stream": True, "stream_options": {"include_usage": True}}
+            content_parts: list[str] = []
+            calls_acc: dict[int, dict] = {}
+            async with client.stream("POST", API_URL, headers=headers, json=payload) as resp:
+                if resp.status_code != 200:
+                    body = (await resp.aread()).decode("utf-8", "replace")
+                    raise OpenAIError(resp.status_code, body[:300])
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    chunk = line[6:].strip()
+                    if chunk == "[DONE]":
+                        break
+                    try:
+                        data = json.loads(chunk)
+                    except json.JSONDecodeError:
+                        continue
+                    if data.get("usage"):
+                        usage = data["usage"]
+                    choices = data.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    if delta.get("content"):
+                        content_parts.append(delta["content"])
+                        yield {"type": "delta", "text": delta["content"]}
+                    for tcd in delta.get("tool_calls") or []:
+                        slot = calls_acc.setdefault(tcd.get("index", 0), {"id": None, "name": "", "arguments": ""})
+                        if tcd.get("id"):
+                            slot["id"] = tcd["id"]
+                        fn = tcd.get("function") or {}
+                        if fn.get("name"):
+                            slot["name"] = fn["name"]
+                        if fn.get("arguments"):
+                            slot["arguments"] += fn["arguments"]
+
+            calls = [calls_acc[i] for i in sorted(calls_acc)]
+            if not calls:   # the model answered — content already streamed above
+                yield {"type": "final", "text": "".join(content_parts).strip(), "usage": usage,
+                       "tool_ms": round(tool_ms, 2), "tool_calls": trace}
+                return
+
+            native.append({"role": "assistant", "content": "".join(content_parts) or None,
+                           "tool_calls": [{"id": c["id"], "type": "function",
+                                           "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls]})
+            for c in calls:
+                name = c["name"]
+                try:
+                    args = json.loads(c["arguments"] or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                t0 = time.perf_counter()
+                result = dispatch(name, args)
+                ms = (time.perf_counter() - t0) * 1000.0
+                tool_ms += ms
+                trace.append({"name": name, "args": args, "result": result, "ms": round(ms, 2)})
+                native.append({"role": "tool", "tool_call_id": c["id"], "content": json.dumps(result)})
+
+    yield {"type": "final", "text": "I wasn't able to finish that action.", "usage": usage,
+           "tool_ms": round(tool_ms, 2), "tool_calls": trace}
+
+
 def _error_message(resp: httpx.Response) -> str:
     """Pull the human-readable error out of an OpenAI error response."""
     try:

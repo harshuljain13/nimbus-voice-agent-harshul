@@ -400,8 +400,14 @@ async function inspect() {
 }
 
 // ---- config persistence (for the Phase 12 widget) ----
+// Merge, don't overwrite: the Voice page writes asr/tts/voice/barge/endpoint/buffer into the same
+// key, so a blind setItem here would wipe the voice settings the widget needs. Keep the other
+// page's fields and only update the ones this (main) playground owns.
 function persist() {
+  let prev = {};
+  try { prev = JSON.parse(localStorage.getItem(CFG_KEY) || "{}"); } catch {}
   localStorage.setItem(CFG_KEY, JSON.stringify({
+    ...prev,
     model_key: $("model").value, response_length: state.length, knowledge: state.knowledge,
     temperature: Number($("temp").value) / 10, system_prompt: $("sysPrompt").value.trim() || null,
   }));
